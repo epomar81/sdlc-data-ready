@@ -1,0 +1,4 @@
+export INTENTION_REFINER_PROVIDER="gemini"
+export INTENTION_REFINER_MODEL="your-gemini-model"
+export INTENTION_REFINER_GEMINI_API_KEY="replace-with-your-api-key"
+export INTENTION_REFINER_OUTPUT_PATH="output_requirements.yaml"

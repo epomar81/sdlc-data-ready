@@ -47,13 +47,26 @@ def test_gemini_adapter_uses_configured_model():
     config = ModelConfig(api_key="secret", model="gemini-example", timeout_seconds=12)
     response = MagicMock(text="{\"ok\": true}")
     with patch("intention_refiner.adapters.models.genai.Client") as client:
-        client.return_value.models.generate_content.return_value = response
+        client.return_value.chats.create.return_value.send_message.return_value = response
 
         result = GeminiAdapter(config).generate("prompt")
 
     assert result == '{"ok": true}'
     client.assert_called_once()
-    assert client.return_value.models.generate_content.call_args.kwargs["model"] == "gemini-example"
+    client.return_value.chats.create.assert_called_once()
+    chat_args = client.return_value.chats.create.call_args.kwargs
+    assert chat_args["model"] == "gemini-example"
+    assert chat_args["config"].response_mime_type == "application/json"
+    client.return_value.chats.create.return_value.send_message.assert_called_once_with("prompt")
+
+
+def test_gemini_adapter_includes_sdk_error_details():
+    config = ModelConfig(api_key="secret", model="gemini-example", timeout_seconds=12)
+    with patch("intention_refiner.adapters.models.genai.Client") as client:
+        client.return_value.chats.create.return_value.send_message.side_effect = RuntimeError("quota exceeded")
+
+        with pytest.raises(RuntimeError, match="Gemini request failed: quota exceeded"):
+            GeminiAdapter(config).generate("prompt")
 
 
 def test_nvidia_adapter_uses_configured_model():

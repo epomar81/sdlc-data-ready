@@ -2,15 +2,51 @@
 
 Intention refiner reads one software initiative from a UTF-8 text file and saves a structured YAML report. It extracts facts, identifies gaps and ambiguous language, and proposes improvements for review. Missing facts remain `null` in the extracted initiative; proposed values appear separately as suggestions.
 
-## Install and run
+## Run from source
 
-Requires Python 3.11 or newer. Install with `python -m pip install -e .` and configure the environment variables below. Then run:
+Requires Python 3.11 or newer and [uv](https://docs.astral.sh/uv/). You can run the package directly from the source tree; you do not need to build a binary or install the `intention-refiner` executable. Configure the environment variables below, then run:
 
 ```sh
-intention-refiner path/to/initiative.txt
+uv run python -m intention_refiner path/to/initiative.txt
 ```
 
-You can also run `python -m intention_refiner path/to/initiative.txt`. The default output is `output_requirements.yaml` in the current directory. The command exits with status 1 and prints an error if configuration, input, model response, or output fails. It does not replace an existing report on failure.
+`uv` resolves the project dependencies and runs the module from the checkout. The default output is `output_requirements.yaml` in the current directory. The command exits with status 1 and prints an error if configuration, input, model response, or output fails. It does not replace an existing report on failure.
+
+Set `INTENTION_REFINER_OUTPUT_PATH` to save the report to a different location. The path may be relative to the current directory or absolute, and its parent directory must already exist:
+
+```sh
+INTENTION_REFINER_OUTPUT_PATH=reports/initiative.yaml uv run python -m intention_refiner path/to/initiative.txt
+```
+
+The Makefile provides the same source-based run command:
+
+```sh
+make run ARGS="path/to/initiative.txt"
+```
+
+Set `INTENTION_REFINER_OUTPUT_PATH` before `make` to choose a different report location:
+
+```sh
+INTENTION_REFINER_OUTPUT_PATH=reports/initiative.yaml make run ARGS="/tmp/example/initiative.txt"
+```
+
+If you prefer pip, install the project in editable mode with `python -m pip install -e .`, then run `python -m intention_refiner path/to/initiative.txt`.
+
+## Test and lint
+
+Run the unit tests without building a binary or installing the command-line executable:
+
+```sh
+uv run --extra test pytest
+```
+
+Or use the Makefile targets. `make quality` runs both the linter and the tests:
+
+```sh
+make test
+make lint
+make quality
+```
 
 ## Environment variables
 
@@ -32,7 +68,7 @@ export INTENTION_REFINER_GEMINI_API_KEY=your-api-key
 intention-refiner path/to/initiative.txt
 ```
 
-The tool reads the process environment. It does not load a `.env` file. Do not commit API keys.
+The tool reads the process environment; it does not load `.env` files itself. To load settings automatically when entering the project directory, install [direnv](https://direnv.net/), copy `.envrc.example` to `.envrc`, replace the placeholder model and API key, then run `direnv allow` in the project directory. `.envrc` is ignored by Git so your local API key is not committed. The example uses Gemini; for NVIDIA, set `INTENTION_REFINER_PROVIDER="nvidia"` and `INTENTION_REFINER_NVIDIA_API_KEY` instead.
 
 ## Report
 
@@ -70,5 +106,3 @@ CLI → text file adapter → refinement use case → ModelPort → Gemini or NV
 ```
 
 The application depends on the `ModelPort` interface and domain models. The CLI chooses the concrete model adapter at startup; the domain and application do not import provider SDKs.
-
-Run the isolated unit tests with `python -m pip install -e '.[test]'` followed by `python -m pytest`.

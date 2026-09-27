@@ -19,18 +19,18 @@ class GeminiAdapter:
                 api_key=self.config.api_key,
                 http_options=types.HttpOptions(timeout=int(self.config.timeout_seconds * 1000)),
             )
-            response = client.models.generate_content(
+            chat = client.chats.create(
                 model=self.config.model,
-                contents=prompt,
                 config=types.GenerateContentConfig(response_mime_type="application/json"),
             )
+            response = chat.send_message(prompt)
             if not response.text:
                 raise ModelRequestError("Gemini returned an empty response")
             return response.text
         except ModelRequestError:
             raise
         except Exception as exc:
-            raise ModelRequestError("Gemini request failed") from exc
+            raise ModelRequestError(f"Gemini request failed: {exc}") from exc
 
 
 class NvidiaAdapter:
@@ -58,7 +58,7 @@ class NvidiaAdapter:
         except ModelRequestError:
             raise
         except Exception as exc:
-            raise ModelRequestError("NVIDIA request failed") from exc
+            raise ModelRequestError(f"NVIDIA request failed: {exc}") from exc
 
 
 def build_model(settings: Settings) -> GeminiAdapter | NvidiaAdapter:

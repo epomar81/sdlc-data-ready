@@ -3,4 +3,6 @@ __pycache__/
 .venv/
 *.py[cod]
 .env
+.envrc
+!.envrc.example
 output_requirements.yaml
