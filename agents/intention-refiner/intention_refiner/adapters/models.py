@@ -1,0 +1,68 @@
+from google import genai
+from google.genai import types
+from openai import OpenAI
+
+from intention_refiner.config import ModelConfig, Settings
+
+
+class ModelRequestError(RuntimeError):
+    """A configured model did not return usable text."""
+
+
+class GeminiAdapter:
+    def __init__(self, config: ModelConfig):
+        self.config = config
+
+    def generate(self, prompt: str) -> str:
+        try:
+            client = genai.Client(
+                api_key=self.config.api_key,
+                http_options=types.HttpOptions(timeout=int(self.config.timeout_seconds * 1000)),
+            )
+            response = client.models.generate_content(
+                model=self.config.model,
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            if not response.text:
+                raise ModelRequestError("Gemini returned an empty response")
+            return response.text
+        except ModelRequestError:
+            raise
+        except Exception as exc:
+            raise ModelRequestError("Gemini request failed") from exc
+
+
+class NvidiaAdapter:
+    def __init__(self, config: ModelConfig):
+        self.config = config
+
+    def generate(self, prompt: str) -> str:
+        try:
+            client = OpenAI(
+                base_url="https://integrate.api.nvidia.com/v1",
+                api_key=self.config.api_key,
+                timeout=self.config.timeout_seconds,
+                max_retries=0,
+            )
+            response = client.chat.completions.create(
+                model=self.config.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content
+            if not content:
+                raise ModelRequestError("NVIDIA returned an empty response")
+            return content
+        except ModelRequestError:
+            raise
+        except Exception as exc:
+            raise ModelRequestError("NVIDIA request failed") from exc
+
+
+def build_model(settings: Settings) -> GeminiAdapter | NvidiaAdapter:
+    config = settings.model_config_for_provider()
+    if settings.provider == "gemini":
+        return GeminiAdapter(config)
+    return NvidiaAdapter(config)

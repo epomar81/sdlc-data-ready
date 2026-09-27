@@ -1,3 +1,17 @@
+Metadata-Version: 2.4
+Name: intention-refiner
+Version: 0.1.0
+Summary: Refine a software initiative into a structured requirements report
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: pydantic<3,>=2.8
+Requires-Dist: pydantic-settings<3,>=2.5
+Requires-Dist: PyYAML<7,>=6
+Requires-Dist: google-genai<3,>=0.3
+Requires-Dist: openai<3,>=1.42
+Provides-Extra: test
+Requires-Dist: pytest<10,>=8; extra == "test"
+
 # Intention refiner
 
 Intention refiner reads one software initiative from a UTF-8 text file and saves a structured YAML report. It extracts facts, identifies gaps and ambiguous language, and proposes improvements for review. Missing facts remain `null` in the extracted initiative; proposed values appear separately as suggestions.
@@ -48,27 +62,6 @@ The model generates the content, so a person should review its suggestions befor
 
 ## Architecture
 
-The package uses ports and adapters to keep the refinement workflow separate from model SDKs and file handling:
-
-| Hexagonal role | Current module | Responsibility |
-| --- | --- | --- |
-| Domain | `intention_refiner/domain/models.py` | Validated initiative, suggestions, audit, proposals, and report types. |
-| Application port | `intention_refiner/application/ports.py` | `ModelPort` defines the model operation needed by the workflow. |
-| Application use case | `intention_refiner/application/refine.py` | Builds the prompt, calls the model port, parses its JSON, and validates the result. |
-| Model adapters | `intention_refiner/adapters/models.py` | Gemini and NVIDIA implementations of the model port. |
-| File adapters | `intention_refiner/adapters/files.py` | Reads the input text and writes the YAML report atomically. |
-| Entry point and composition | `intention_refiner/cli.py`, `intention_refiner/__main__.py` | Parses the input path, creates the selected adapter, runs the use case, and writes the report. |
-| Configuration | `intention_refiner/config.py` | Validates environment variables and supplies the selected model's settings. |
-| Prompt resource | `intention_refiner/requirements_prompt.md` | Defines the extraction and refinement instructions used by the application use case. |
-
-```text
-CLI → text file adapter → refinement use case → ModelPort → Gemini or NVIDIA adapter
-                              ↓
-                        domain models
-                              ↓
-                      YAML file adapter
-```
-
-The application depends on the `ModelPort` interface and domain models. The CLI chooses the concrete model adapter at startup; the domain and application do not import provider SDKs.
+The domain defines the validated report contract. The application use case builds the prompt, calls a model port, and validates the response. Gemini and NVIDIA implement that port as adapters. The CLI composes the selected adapter with the use case and the file input and YAML output adapters. Provider SDKs and environment settings stay outside the domain and application layers.
 
 Run the isolated unit tests with `python -m pip install -e '.[test]'` followed by `python -m pytest`.

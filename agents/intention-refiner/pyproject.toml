@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intention-refiner"
+version = "0.1.0"
+description = "Refine a software initiative into a structured requirements report"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.8,<3",
+    "pydantic-settings>=2.5,<3",
+    "PyYAML>=6,<7",
+    "google-genai>=0.3,<3",
+    "openai>=1.42,<3",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.12,<1"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[project.scripts]
+intention-refiner = "intention_refiner.cli:main"
+
+[tool.setuptools.package-data]
+intention_refiner = ["requirements_prompt.md"]
