@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from importlib.resources import files
 
@@ -6,6 +7,15 @@ from pydantic import ValidationError
 
 from intention_refiner.application.ports import ModelPort
 from intention_refiner.domain.models import RefinementPayload, RefinementResult
+
+logger = logging.getLogger(__name__)
+
+TAG_REASONS = {
+    "MISSING_INFO": "required information is missing",
+    "AI_ENHANCED": "the content was strengthened for clarity or completeness",
+    "FEATURE_IDEA": "the content proposes a new feature idea",
+    "CLARIFICATION": "the content asks to resolve ambiguity",
+}
 
 
 class InvalidModelResponse(ValueError):
@@ -24,7 +34,16 @@ class RefineInitiative:
         start = time.perf_counter()
         response = self.model.generate(prompt)
         elapsed_ms = (time.perf_counter() - start) * 1000
-        payload = parse_response(response)
+        logger.info(
+            "Token usage: Prompt tokens: %d, Completion tokens: %d, Total tokens: %d",
+            response.prompt_tokens, response.completion_tokens, response.total_tokens,
+        )
+        payload = parse_response(response.text)
+        for suggestion in payload.suggestions:
+            logger.info(
+                "Generated tag: %s | Content: %s | Reason: %s",
+                suggestion.tag, suggestion.text, TAG_REASONS[suggestion.tag],
+            )
         return RefinementResult(**payload.model_dump(), response_time_ms=elapsed_ms)
 
 

@@ -45,13 +45,14 @@ def test_settings_reject_invalid_timeout(monkeypatch):
 
 def test_gemini_adapter_uses_configured_model():
     config = ModelConfig(api_key="secret", model="gemini-example", timeout_seconds=12)
-    response = MagicMock(text="{\"ok\": true}")
+    response = MagicMock(text="{\"ok\": true}", usage_metadata=MagicMock(prompt_token_count=7, candidates_token_count=4, total_token_count=11))
     with patch("intention_refiner.adapters.models.genai.Client") as client:
         client.return_value.chats.create.return_value.send_message.return_value = response
 
         result = GeminiAdapter(config).generate("prompt")
 
-    assert result == '{"ok": true}'
+    assert result.text == '{"ok": true}'
+    assert (result.prompt_tokens, result.completion_tokens, result.total_tokens) == (7, 4, 11)
     client.assert_called_once()
     client.return_value.chats.create.assert_called_once()
     chat_args = client.return_value.chats.create.call_args.kwargs
@@ -73,10 +74,12 @@ def test_nvidia_adapter_uses_configured_model():
     config = ModelConfig(api_key="secret", model="nvidia-example", timeout_seconds=12)
     with patch("intention_refiner.adapters.models.OpenAI") as client:
         client.return_value.chat.completions.create.return_value.choices = [MagicMock(message=MagicMock(content='{"ok": true}'))]
+        client.return_value.chat.completions.create.return_value.usage = MagicMock(prompt_tokens=5, completion_tokens=3, total_tokens=8)
 
         result = NvidiaAdapter(config).generate("prompt")
 
-    assert result == '{"ok": true}'
+    assert result.text == '{"ok": true}'
+    assert (result.prompt_tokens, result.completion_tokens, result.total_tokens) == (5, 3, 8)
     client.assert_called_once()
     assert client.return_value.chat.completions.create.call_args.kwargs["model"] == "nvidia-example"
 

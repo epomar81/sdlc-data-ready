@@ -1,4 +1,5 @@
 import json
+import logging
 
 import pytest
 from pydantic import ValidationError
@@ -14,7 +15,8 @@ class FakeModel:
 
     def generate(self, prompt):
         self.prompt = prompt
-        return self.response
+        from intention_refiner.application.ports import ModelResponse
+        return ModelResponse(text=self.response, prompt_tokens=12, completion_tokens=8, total_tokens=20)
 
 
 def test_refine_preserves_unknown_fields_and_labels_suggestions():
@@ -39,6 +41,24 @@ def test_refine_preserves_unknown_fields_and_labels_suggestions():
     assert result.refinement_proposals[0].proposed_text == "Online customers"
     assert "Build a fast booking site" in model.prompt
     assert result.response_time_ms >= 0
+
+
+def test_refine_logs_token_usage_and_generated_tag(caplog):
+    response = {"initiative": {}, "suggestions": [
+        {"field_name": "target", "tag": "MISSING_INFO", "text": "Identify intended users."}
+    ], "audit": {"ambiguities": [], "missing_information": [], "metric_gaps": [], "other_risks": []},
+        "refinement_proposals": []}
+    with caplog.at_level(logging.INFO):
+        RefineInitiative(FakeModel(json.dumps(response))).execute("Build an app")
+
+    assert "Prompt tokens: 12, Completion tokens: 8, Total tokens: 20" in caplog.text
+    assert "Generated tag: MISSING_INFO | Content: Identify intended users." in caplog.text
+    assert "Reason: required information is missing" in caplog.text
+
+
+def test_refine_raises_for_empty_input():
+    with pytest.raises(ValueError, match="Input file is empty"):
+        RefineInitiative(FakeModel("{}")).execute("  ")
 
 
 @pytest.mark.parametrize("response", ["not json", "{}", '{"initiative": []}', '{"initiative": {"title": 7}}'])

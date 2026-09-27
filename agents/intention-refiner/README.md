@@ -70,6 +70,36 @@ intention-refiner path/to/initiative.txt
 
 The tool reads the process environment; it does not load `.env` files itself. To load settings automatically when entering the project directory, install [direnv](https://direnv.net/), copy `.envrc.example` to `.envrc`, replace the placeholder model and API key, then run `direnv allow` in the project directory. `.envrc` is ignored by Git so your local API key is not committed. The example uses Gemini; for NVIDIA, set `INTENTION_REFINER_PROVIDER="nvidia"` and `INTENTION_REFINER_NVIDIA_API_KEY` instead.
 
+## Console logging
+
+The command prints one JSON object per log line, with `level` and `message` fields. Each completed model request reports the exact prompt, completion, and total token counts returned by the provider. Each generated suggestion reports its tag, suggestion content, and a short explanation of what that tag means. The CLI logs each failure once at the command boundary and exits with status 1.
+
+The model port returns both the generated text and provider usage metadata. Gemini usage comes from `usage_metadata`; NVIDIA usage comes from the chat completion's `usage` object. Token counts are kept in the model response and logged after the request succeeds. If a model request or response validation fails, the error propagates to the CLI and is logged once there.
+
+Run the self-contained demonstration from the repository root. It uses a local fake model, needs no API key, and prints representative token and tag logs:
+
+```sh
+uv run python examples/logging_demo.py
+```
+
+Example output:
+
+```text
+{"level": "info", "message": "Token usage: Prompt tokens: 120, Completion tokens: 45, Total tokens: 165"}
+{"level": "info", "message": "Generated tag: MISSING_INFO | Content: Identify the intended customer group. | Reason: required information is missing"}
+```
+
+The demo's model adapter shows the response contract used by real adapters:
+
+```python
+ModelResponse(
+    text='{"initiative": {}, "suggestions": [...], ...}',
+    prompt_tokens=120,
+    completion_tokens=45,
+    total_tokens=165,
+)
+```
+
 ## Report
 
 The YAML report has five sections:
