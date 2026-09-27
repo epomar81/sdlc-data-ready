@@ -24,7 +24,13 @@ class DemoModel:
                 "metric_gaps": [],
                 "other_risks": [],
             },
-            "refinement_proposals": [],
+            "refinement_proposals": [
+                {
+                    "field_name": "target",
+                    "proposed_text": "Customers booking online.",
+                    "rationale": "The intended users were not specified.",
+                }
+            ],
         }
         return ModelResponse(
             text=json.dumps(response),

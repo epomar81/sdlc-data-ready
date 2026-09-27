@@ -43,17 +43,19 @@ def test_refine_preserves_unknown_fields_and_labels_suggestions():
     assert result.response_time_ms >= 0
 
 
-def test_refine_logs_token_usage_and_generated_tag(caplog):
+def test_refine_logs_token_usage_and_refinement_proposal_not_tags(caplog):
     response = {"initiative": {}, "suggestions": [
         {"field_name": "target", "tag": "MISSING_INFO", "text": "Identify intended users."}
     ], "audit": {"ambiguities": [], "missing_information": [], "metric_gaps": [], "other_risks": []},
-        "refinement_proposals": []}
+        "refinement_proposals": [
+            {"field_name": "target", "proposed_text": "Online customers", "rationale": "Clarify the intended audience."}
+        ]}
     with caplog.at_level(logging.INFO):
         RefineInitiative(FakeModel(json.dumps(response))).execute("Build an app")
 
     assert "Prompt tokens: 12, Completion tokens: 8, Total tokens: 20" in caplog.text
-    assert "Generated tag: MISSING_INFO | Content: Identify intended users." in caplog.text
-    assert "Reason: required information is missing" in caplog.text
+    assert "Refinement proposal: Field: target | Content: Online customers | Reason: Clarify the intended audience." in caplog.text
+    assert "Generated tag" not in caplog.text
 
 
 def test_refine_raises_for_empty_input():

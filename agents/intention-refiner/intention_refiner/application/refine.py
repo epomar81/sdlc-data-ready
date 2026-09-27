@@ -10,14 +10,6 @@ from intention_refiner.domain.models import RefinementPayload, RefinementResult
 
 logger = logging.getLogger(__name__)
 
-TAG_REASONS = {
-    "MISSING_INFO": "required information is missing",
-    "AI_ENHANCED": "the content was strengthened for clarity or completeness",
-    "FEATURE_IDEA": "the content proposes a new feature idea",
-    "CLARIFICATION": "the content asks to resolve ambiguity",
-}
-
-
 class InvalidModelResponse(ValueError):
     """The model returned data outside the expected report contract."""
 
@@ -39,10 +31,10 @@ class RefineInitiative:
             response.prompt_tokens, response.completion_tokens, response.total_tokens,
         )
         payload = parse_response(response.text)
-        for suggestion in payload.suggestions:
+        for proposal in payload.refinement_proposals:
             logger.info(
-                "Generated tag: %s | Content: %s | Reason: %s",
-                suggestion.tag, suggestion.text, TAG_REASONS[suggestion.tag],
+                "Refinement proposal: Field: %s | Content: %s | Reason: %s",
+                proposal.field_name, proposal.proposed_text, proposal.rationale,
             )
         return RefinementResult(**payload.model_dump(), response_time_ms=elapsed_ms)
 
