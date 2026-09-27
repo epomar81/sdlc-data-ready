@@ -4,7 +4,9 @@ intention_refiner/__init__.py
 intention_refiner/__main__.py
 intention_refiner/cli.py
 intention_refiner/config.py
+intention_refiner/console_logging.py
 intention_refiner/requirements_prompt.md
+intention_refiner/telemetry.py
 intention_refiner.egg-info/PKG-INFO
 intention_refiner.egg-info/SOURCES.txt
 intention_refiner.egg-info/dependency_links.txt

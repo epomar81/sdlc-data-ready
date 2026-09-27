@@ -58,6 +58,17 @@ make quality
 | `INTENTION_REFINER_NVIDIA_API_KEY` | Required when using NVIDIA. |
 | `INTENTION_REFINER_TIMEOUT_SECONDS` | Optional request timeout; defaults to `120`. |
 | `INTENTION_REFINER_OUTPUT_PATH` | Optional YAML output path; defaults to `output_requirements.yaml`. Its parent directory must exist. |
+| `INTENTION_REFINER_TELEMETRY_ENABLED` | Optional: set to `true` to export OpenTelemetry traces and metrics over OTLP/HTTP; defaults to `false`. |
+
+When telemetry is enabled, configure the destination using the standard OpenTelemetry OTLP environment variables, such as `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`. The service name is `intention-refiner`. Each CLI invocation receives a correlation ID that appears in its JSON logs and root trace. The YAML report does not contain the ID. Telemetry records operation status, provider/model, request duration, and token counts; initiative text, prompts, generated responses, and exception messages are never recorded. Existing console logs are not exported as an OpenTelemetry log signal.
+
+Example:
+
+```sh
+export INTENTION_REFINER_TELEMETRY_ENABLED=true
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+intention-refiner path/to/initiative.txt
+```
 
 For example:
 

@@ -1,5 +1,6 @@
 import json
 import logging
+from contextlib import contextmanager
 
 import pytest
 from pydantic import ValidationError
@@ -41,6 +42,66 @@ def test_refine_preserves_unknown_fields_and_labels_suggestions():
     assert result.refinement_proposals[0].proposed_text == "Online customers"
     assert "Build a fast booking site" in model.prompt
     assert result.response_time_ms >= 0
+
+
+def test_refine_records_model_telemetry_without_content():
+    class RecordingTelemetry:
+        def __init__(self):
+            self.spans = []
+            self.requests = []
+
+        @contextmanager
+        def span(self, name, attributes):
+            self.spans.append((name, attributes))
+            yield object()
+
+        def record_model_request(self, metrics):
+            self.requests.append(metrics)
+
+    telemetry = RecordingTelemetry()
+    result = RefineInitiative(FakeModel(json.dumps({
+        "initiative": {}, "suggestions": [],
+        "audit": {"ambiguities": [], "missing_information": [], "metric_gaps": [], "other_risks": []},
+        "refinement_proposals": [],
+    })), telemetry).execute("private initiative text")
+
+    assert result.initiative.title is None
+    assert telemetry.spans == [("model.request", {"provider": "fakemodel", "model": "unknown"})]
+    assert telemetry.requests[0].succeeded is True
+    assert telemetry.requests[0].total_tokens == 20
+    assert "private initiative text" not in repr(telemetry.spans)
+
+
+def test_failed_model_request_records_sanitized_error_telemetry():
+    class RecordingSpan:
+        status = None
+
+        def set_status(self, status):
+            self.status = status
+
+    class RecordingTelemetry:
+        def __init__(self):
+            self.span_object = RecordingSpan()
+            self.requests = []
+
+        @contextmanager
+        def span(self, name, attributes):
+            yield self.span_object
+
+        def record_model_request(self, metrics):
+            self.requests.append(metrics)
+
+    class FailingModel:
+        def generate(self, prompt):
+            raise RuntimeError("private prompt content")
+
+    telemetry = RecordingTelemetry()
+    with pytest.raises(RuntimeError):
+        RefineInitiative(FailingModel(), telemetry).execute("private initiative content")
+
+    assert telemetry.span_object.status.description == "RuntimeError"
+    assert telemetry.requests[0].succeeded is False
+    assert "private" not in repr((telemetry.span_object.status, telemetry.requests))
 
 
 def test_refine_logs_token_usage_and_refinement_proposal_not_tags(caplog):

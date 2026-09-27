@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     nvidia_api_key: str = Field(default="", repr=False)
     timeout_seconds: float = Field(default=120, gt=0)
     output_path: Path = Path("output_requirements.yaml")
+    telemetry_enabled: bool = False
 
     @model_validator(mode="after")
     def validate_selected_key(self):

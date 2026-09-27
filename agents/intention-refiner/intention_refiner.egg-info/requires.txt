@@ -3,6 +3,9 @@ pydantic-settings<3,>=2.5
 PyYAML<7,>=6
 google-genai<3,>=0.3
 openai<3,>=1.42
+opentelemetry-api<2,>=1.27
+opentelemetry-sdk<2,>=1.27
+opentelemetry-exporter-otlp-proto-http<2,>=1.27
 
 [test]
 pytest<10,>=8

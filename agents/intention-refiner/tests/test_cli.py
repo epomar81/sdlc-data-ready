@@ -26,6 +26,17 @@ def test_json_log_formatter_emits_valid_json():
     }
 
 
+def test_json_log_formatter_includes_correlation_id():
+    record = logging.LogRecord("test", logging.INFO, __file__, 1, "Started", (), None)
+    record.correlation_id = "run-123"
+
+    assert json.loads(JsonLogFormatter().format(record)) == {
+        "level": "info",
+        "message": "Started",
+        "correlation_id": "run-123",
+    }
+
+
 def test_cli_writes_report(tmp_path, monkeypatch):
     source = tmp_path / "idea.txt"
     source.write_text("Build a car reservation site")
@@ -40,6 +51,19 @@ def test_cli_writes_report(tmp_path, monkeypatch):
 
     assert code == 0
     assert target.exists()
+
+
+def test_cli_generates_a_new_correlation_id_for_each_run(tmp_path, monkeypatch, caplog):
+    monkeypatch.setenv("INTENTION_REFINER_PROVIDER", "gemini")
+    monkeypatch.setenv("INTENTION_REFINER_MODEL", "example")
+    monkeypatch.setenv("INTENTION_REFINER_GEMINI_API_KEY", "secret")
+    for index in range(2):
+        source = tmp_path / f"missing-{index}.txt"
+        assert main([str(source)]) == 1
+
+    ids = [record.correlation_id for record in caplog.records]
+    assert len(ids) == 2
+    assert ids[0] != ids[1]
 
 
 def test_cli_missing_input_logs_error_once_and_leaves_output_untouched(tmp_path, monkeypatch, caplog):

@@ -22,6 +22,16 @@ def test_settings_load_selected_provider_from_environment(monkeypatch):
     assert settings.provider == "nvidia"
     assert settings.model_config_for_provider() == ModelConfig(api_key="secret", model="example-model", timeout_seconds=12)
     assert str(settings.output_path) == "custom.yaml"
+    assert settings.telemetry_enabled is False
+
+
+def test_settings_can_enable_telemetry(monkeypatch):
+    monkeypatch.setenv("INTENTION_REFINER_PROVIDER", "nvidia")
+    monkeypatch.setenv("INTENTION_REFINER_MODEL", "example-model")
+    monkeypatch.setenv("INTENTION_REFINER_NVIDIA_API_KEY", "secret")
+    monkeypatch.setenv("INTENTION_REFINER_TELEMETRY_ENABLED", "true")
+
+    assert Settings().telemetry_enabled is True
 
 
 def test_settings_require_selected_provider_key(monkeypatch):
