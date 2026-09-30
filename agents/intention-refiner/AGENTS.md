@@ -1,4 +1,4 @@
-# kbzone — AI Agent Guide
+# intention-refiner — AI Agent Guide
 
 ## What This Project Does
 

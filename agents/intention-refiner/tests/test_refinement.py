@@ -20,6 +20,10 @@ class FakeModel:
         return ModelResponse(text=self.response, prompt_tokens=12, completion_tokens=8, total_tokens=20)
 
 
+def model_response(payload):
+    return json.dumps(payload)
+
+
 def test_refine_preserves_unknown_fields_and_labels_suggestions():
     response = {
         "initiative": {"title": "Reserve cars", "target": None},
@@ -31,7 +35,7 @@ def test_refine_preserves_unknown_fields_and_labels_suggestions():
             {"field_name": "target", "proposed_text": "Online customers", "rationale": "Confirm with the owner."}
         ],
     }
-    model = FakeModel(json.dumps(response))
+    model = FakeModel(model_response(response))
 
     result = RefineInitiative(model).execute("Build a fast booking site")
 
@@ -59,7 +63,7 @@ def test_refine_records_model_telemetry_without_content():
             self.requests.append(metrics)
 
     telemetry = RecordingTelemetry()
-    result = RefineInitiative(FakeModel(json.dumps({
+    result = RefineInitiative(FakeModel(model_response({
         "initiative": {}, "suggestions": [],
         "audit": {"ambiguities": [], "missing_information": [], "metric_gaps": [], "other_risks": []},
         "refinement_proposals": [],
@@ -112,7 +116,7 @@ def test_refine_logs_token_usage_and_refinement_proposal_not_tags(caplog):
             {"field_name": "target", "proposed_text": "Online customers", "rationale": "Clarify the intended audience."}
         ]}
     with caplog.at_level(logging.INFO):
-        RefineInitiative(FakeModel(json.dumps(response))).execute("Build an app")
+        RefineInitiative(FakeModel(model_response(response))).execute("Build an app")
 
     assert "Prompt tokens: 12, Completion tokens: 8, Total tokens: 20" in caplog.text
     assert "Refinement proposal: Field: target | Content: Online customers | Reason: Clarify the intended audience." in caplog.text
@@ -130,8 +134,23 @@ def test_refine_rejects_invalid_model_output(response):
         RefineInitiative(FakeModel(response)).execute("An idea")
 
 
+def test_refine_prompt_requires_report_schema_shape():
+    model = FakeModel(model_response({
+        "initiative": {}, "suggestions": [],
+        "audit": {"ambiguities": [], "missing_information": [], "metric_gaps": [], "other_risks": []},
+        "refinement_proposals": [],
+    }))
+
+    RefineInitiative(model).execute("An idea")
+
+    assert '"initiative"' in model.prompt
+    assert '"refinement_proposals"' in model.prompt
+    assert "application adds these values" in model.prompt
+    assert '"apiVersion"' not in model.prompt
+
+
 def test_refine_accepts_json_fence():
-    response = '```json\n{"initiative": {}, "suggestions": [], "audit": {"ambiguities": [], "missing_information": [], "metric_gaps": [], "other_risks": []}, "refinement_proposals": []}\n```'
+    response = f'```json\n{model_response({"initiative": {}, "suggestions": [], "audit": {"ambiguities": [], "missing_information": [], "metric_gaps": [], "other_risks": []}, "refinement_proposals": []})}\n```'
 
     result = RefineInitiative(FakeModel(response)).execute("An idea")
 

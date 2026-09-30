@@ -1,0 +1,110 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+title: Initiative Report
+description: Structured requirements refinement report produced by intention-refiner.
+type: object
+additionalProperties: false
+required:
+  - initiative
+  - suggestions
+  - audit
+  - refinement_proposals
+  - metadata
+properties:
+  initiative:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - title
+      - problem_statement
+      - target
+      - business_value
+      - business_scope
+      - ex_scope
+      - kpi
+      - desired_outcomes
+      - kpis_and_outcomes
+    properties:
+      id: {type: [string, 'null']}
+      title: {type: [string, 'null']}
+      problem_statement: {type: [string, 'null']}
+      target: {type: [string, 'null']}
+      business_value: {type: [string, 'null']}
+      business_scope: {type: [string, 'null']}
+      ex_scope: {type: [string, 'null']}
+      kpi: {type: [string, 'null']}
+      desired_outcomes: {type: [string, 'null']}
+      kpis_and_outcomes: {type: [string, 'null']}
+  suggestions:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [field_name, tag, text]
+      properties:
+        field_name:
+          $ref: '#/$defs/requirementField'
+        tag:
+          type: string
+          enum: [MISSING_INFO, AI_ENHANCED, FEATURE_IDEA, CLARIFICATION]
+        text:
+          type: string
+          minLength: 1
+  audit:
+    type: object
+    additionalProperties: false
+    required: [ambiguities, missing_information, metric_gaps, other_risks]
+    properties:
+      ambiguities:
+        type: array
+        items: {type: string}
+      missing_information:
+        type: array
+        items: {type: string}
+      metric_gaps:
+        type: array
+        items: {type: string}
+      other_risks:
+        type: array
+        items: {type: string}
+  refinement_proposals:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [field_name, proposed_text, rationale]
+      properties:
+        field_name:
+          $ref: '#/$defs/requirementField'
+        proposed_text:
+          type: string
+          minLength: 1
+        rationale:
+          type: string
+          minLength: 1
+  metadata:
+    type: object
+    additionalProperties: false
+    required: [provider, model, response_time_ms]
+    properties:
+      provider:
+        type: string
+      model:
+        type: string
+      response_time_ms:
+        type: number
+        minimum: 0
+$defs:
+  requirementField:
+    type: string
+    enum:
+      - id
+      - title
+      - problem_statement
+      - target
+      - business_value
+      - business_scope
+      - ex_scope
+      - kpi
+      - desired_outcomes
+      - kpis_and_outcomes
