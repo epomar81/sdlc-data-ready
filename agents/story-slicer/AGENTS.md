@@ -28,5 +28,13 @@ than treating this statement as a substitute for them.
 
 ## Verification
 
-- After applying any project change, run `make lint` and `make test` before considering the work complete.
-- Fix any reported issues and rerun both targets. If a target cannot run, report the reason and do not claim verification passed.
+- After applying any project change, you MUST run both `make lint` and `make test`
+  before considering the work complete. This includes code, tests, dependencies,
+  configuration, Makefile, documentation, and this `AGENTS.md` file.
+- Run both targets against the final changed state. If you make further changes
+  after verification, rerun both targets.
+- Fix any reported issues and rerun both targets until both pass. Do not skip
+  either target because the change appears small or unrelated to Python code.
+- If a target cannot run, report the command and reason; do not claim verification
+  passed or the work is fully verified.
+- In the final response, report the result of both `make lint` and `make test`.
