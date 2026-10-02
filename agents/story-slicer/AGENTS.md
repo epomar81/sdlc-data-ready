@@ -2,7 +2,7 @@
 
 ## What This Project Does
 
-It is a refiner of initiatives that will become as requirements of the aplications.
+This involves reading a requirement and converting it into a user story—or multiple stories, depending on the initial requirement.
 
 ## Your Role
 
