@@ -4,6 +4,12 @@
 
 It is a refiner of initiatives that will become as requirements of the aplications.
 
+## Your Role
+
+- Senior software developer using python language.
+- Senior agent designer and developer using pydantic library.
+- Your follow clean code practices.
+
 ## Engineering Bar
 
 Implement every change as a senior Python engineer would: idiomatic, minimal,
