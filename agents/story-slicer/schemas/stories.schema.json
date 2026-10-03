@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Story Slicer story batch",
+  "description": "The JSON output contract for Story Slicer.",
+  "type": "object",
+  "properties": {
+    "stories": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/story" }
+    }
+  },
+  "required": ["stories"],
+  "additionalProperties": false,
+  "$defs": {
+    "nonBlank": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "metadataText": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^$|\\S"
+        },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonBlank" }
+        }
+      ]
+    },
+    "scenario": {
+      "type": "object",
+      "properties": {
+        "Scenario": { "$ref": "#/$defs/nonBlank" },
+        "Given": { "$ref": "#/$defs/nonBlank" },
+        "When": { "$ref": "#/$defs/nonBlank" },
+        "Then": { "$ref": "#/$defs/nonBlank" }
+      },
+      "required": ["Scenario", "Given", "When", "Then"],
+      "additionalProperties": false
+    },
+    "story": {
+      "type": "object",
+      "properties": {
+        "ID": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*-[1-9][0-9]*$"
+        },
+        "title": { "$ref": "#/$defs/nonBlank" },
+        "Who": { "$ref": "#/$defs/nonBlank" },
+        "Action_What": { "$ref": "#/$defs/nonBlank" },
+        "Benefit_Why": { "$ref": "#/$defs/nonBlank" },
+        "Priority": { "enum": ["HIGH", "MEDIUM", "LOW"] },
+        "acceptance_criteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/scenario" }
+        },
+        "tags": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonBlank" }
+        },
+        "clarification": { "$ref": "#/$defs/metadataText" },
+        "suggestions": { "$ref": "#/$defs/metadataText" }
+      },
+      "required": [
+        "ID",
+        "title",
+        "Who",
+        "Action_What",
+        "Benefit_Why",
+        "Priority",
+        "acceptance_criteria",
+        "tags",
+        "clarification",
+        "suggestions"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "tags": { "contains": { "const": "MISSING_INFO" } }
+            },
+            "required": ["tags"]
+          },
+          "then": {
+            "properties": {
+              "clarification": { "$ref": "#/$defs/nonEmptyMetadataText" },
+              "suggestions": { "$ref": "#/$defs/nonEmptyMetadataText" }
+            }
+          }
+        }
+      ]
+    },
+    "nonEmptyMetadataText": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonBlank" }
+        }
+      ]
+    }
+  }
+}
