@@ -26,3 +26,8 @@ Explain ambiguous phrases, missing facts, and metric problems in the audit array
 Suggest DORA metrics only when the initiative concerns software delivery performance.
 Write in the same language as the initiative. Empty arrays are valid when there are no findings.
 The final YAML report also has a `metadata` object containing `provider`, `model`, and `response_time_ms`; the application adds these values, so omit `metadata` from your JSON response.
+
+Every CLARIFICATION suggestion must be an explicit, answerable question for the initiative owner.
+Every MISSING_INFO suggestion must propose specific completion text for human review,
+not ask a question. Keep the corresponding extracted fact null when it is unknown;
+never present a proposed completion as an established fact.

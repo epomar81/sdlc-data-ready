@@ -30,6 +30,9 @@ def configure_logging(correlation_id: str) -> None:
     _correlation_id.set(correlation_id)
     root = logging.getLogger()
     root.setLevel(logging.INFO)
+    # Transport INFO/DEBUG messages contain private URLs and request headers.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     handler = next(
         (item for item in root.handlers if getattr(item, "_intention_refiner_handler", False)),
         None,

@@ -2,3 +2,12 @@ export INTENTION_REFINER_PROVIDER="gemini"
 export INTENTION_REFINER_MODEL="your-gemini-model"
 export INTENTION_REFINER_GEMINI_API_KEY="replace-with-your-api-key"
 export INTENTION_REFINER_OUTPUT_PATH="output_requirements.yaml"
+
+# Metrics are active even when OTLP tracing is disabled.
+export INTENTION_REFINER_METRICS_EXPORTER="console"
+export INTENTION_REFINER_INTEGRATION_TIMEOUT_SECONDS="30"
+# Configure only the remote provider you use:
+# export INTENTION_REFINER_GITHUB_TOKEN="replace-with-github-token"
+# export INTENTION_REFINER_JIRA_BASE_URL="https://team.atlassian.net"
+# export INTENTION_REFINER_JIRA_EMAIL="agent@example.com"
+# export INTENTION_REFINER_JIRA_API_TOKEN="replace-with-jira-token"

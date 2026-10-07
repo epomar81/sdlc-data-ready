@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from intention_refiner.domain.integration import SourceProvenance
+
 RequirementField = Literal[
     "id", "title", "problem_statement", "target", "business_value", "business_scope",
     "ex_scope", "kpi", "desired_outcomes", "kpis_and_outcomes",
@@ -56,5 +58,6 @@ class RefinementResult(RefinementPayload):
 
 
 class RefinementReport(RefinementResult):
+    source: SourceProvenance | None = None
     provider: str
     model: str

@@ -5,6 +5,7 @@ Summary: Refine a software initiative into a structured requirements report
 Requires-Python: >=3.11
 Description-Content-Type: text/markdown
 Requires-Dist: pydantic<3,>=2.8
+Requires-Dist: httpx<1,>=0.27
 Requires-Dist: pydantic-settings<3,>=2.5
 Requires-Dist: PyYAML<7,>=6
 Requires-Dist: google-genai<3,>=0.3
@@ -12,12 +13,13 @@ Requires-Dist: openai<3,>=1.42
 Requires-Dist: opentelemetry-api<2,>=1.27
 Requires-Dist: opentelemetry-sdk<2,>=1.27
 Requires-Dist: opentelemetry-exporter-otlp-proto-http<2,>=1.27
+Requires-Dist: githubkit<0.16,>=0.15
 Provides-Extra: test
 Requires-Dist: pytest<10,>=8; extra == "test"
 
 # Intention refiner
 
-Intention refiner reads one software initiative from a UTF-8 text file and saves a structured YAML report. It extracts facts, identifies gaps and ambiguous language, and proposes improvements for review. Missing facts remain `null` in the extracted initiative; proposed values appear separately as suggestions.
+Intention refiner reads one software initiative from a UTF-8 file, GitHub issue, or Jira Cloud issue and saves a structured YAML report. Remote runs can optionally publish results, clarification questions, and review labels back to the originating issue. It extracts facts, identifies gaps and ambiguous language, and proposes improvements for review. Missing facts remain `null` in the extracted initiative; proposed values appear separately as suggestions.
 
 ## Run from source
 
@@ -75,9 +77,15 @@ make quality
 | `INTENTION_REFINER_NVIDIA_API_KEY` | Required when using NVIDIA. |
 | `INTENTION_REFINER_TIMEOUT_SECONDS` | Optional request timeout; defaults to `120`. |
 | `INTENTION_REFINER_OUTPUT_PATH` | Optional YAML output path; defaults to `output_requirements.yaml`. Its parent directory must exist. |
-| `INTENTION_REFINER_TELEMETRY_ENABLED` | Optional: set to `true` to export OpenTelemetry traces and metrics over OTLP/HTTP; defaults to `false`. |
+| `INTENTION_REFINER_TELEMETRY_ENABLED` | Optional: enable OTLP/HTTP traces; defaults to `false`. Metrics remain active independently. |
+| `INTENTION_REFINER_METRICS_EXPORTER` | `console` (default) or `otlp`; controls model and integration metric export. |
+| `INTENTION_REFINER_GITHUB_TOKEN` | Required for GitHub input; token with Issues read access. Publishing also needs Issues write access. |
+| `INTENTION_REFINER_JIRA_BASE_URL` | Required for Jira: HTTPS site origin, e.g. `https://team.atlassian.net`. |
+| `INTENTION_REFINER_JIRA_EMAIL` | Required for Jira: account email. |
+| `INTENTION_REFINER_JIRA_API_TOKEN` | Required for Jira: site-compatible API token used with Basic authentication. |
+| `INTENTION_REFINER_INTEGRATION_TIMEOUT_SECONDS` | Positive per-request timeout for source and publication HTTP calls; defaults to `30`. |
 
-When telemetry is enabled, configure the destination using the standard OpenTelemetry OTLP environment variables, such as `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`. The service name is `intention-refiner`. Each CLI invocation receives a correlation ID that appears in its JSON logs and root trace. The YAML report does not contain the ID. Traces and metrics include operation status, provider/model, request duration, and token counts; initiative text, prompts, and generated responses are never recorded. Existing console logs are not exported as an OpenTelemetry log signal.
+For OTLP export, configure the destination using the standard OpenTelemetry OTLP environment variables, such as `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`. The service name is `intention-refiner`. Each CLI invocation receives a correlation ID that appears in its JSON logs and root trace. The YAML report does not contain the correlation ID. Telemetry records operation status, provider/model, request duration, token counts, publication outcomes, and publication payload sizes; initiative text, prompts, generated responses, and exception messages are never recorded. Existing console logs are not exported as an OpenTelemetry log signal.
 
 Example:
 
@@ -136,7 +144,7 @@ The YAML report has five sections:
 - `suggestions`: field-linked recommendations tagged `MISSING_INFO`, `AI_ENHANCED`, `FEATURE_IDEA`, or `CLARIFICATION`.
 - `audit`: lists of ambiguities, missing information, metric gaps, and other risks.
 - `refinement_proposals`: proposed replacement text, its field, and a rationale.
-- `metadata`: provider, model, and model response time in milliseconds.
+- `metadata`: provider, model, model response time in milliseconds, and optional remote `source` provenance (`provider`, `identifier`, `url`). Local reports omit source provenance.
 
 The model generates the content, so a person should review its suggestions before treating them as requirements. DORA metrics are suggested only when the initiative concerns software delivery performance.
 
@@ -147,7 +155,7 @@ The package uses ports and adapters to keep the refinement workflow separate fro
 | Hexagonal role | Current module | Responsibility |
 | --- | --- | --- |
 | Domain | `intention_refiner/domain/models.py` | Validated initiative, suggestions, audit, proposals, and report types. |
-| Application port | `intention_refiner/application/ports.py` | `ModelPort` defines the model operation needed by the workflow. |
+| Application ports | `intention_refiner/application/ports.py` | Model generation, requirement loading, and issue publication contracts. |
 | Application use case | `intention_refiner/application/refine.py` | Builds the prompt, calls the model port, parses its JSON, and validates the result. |
 | Model adapters | `intention_refiner/adapters/models.py` | Gemini and NVIDIA implementations of the model port. |
 | File adapters | `intention_refiner/adapters/files.py` | Reads the input text and writes the YAML report atomically. |
@@ -164,3 +172,138 @@ CLI → text file adapter → refinement use case → ModelPort → Gemini or NV
 ```
 
 The application depends on the `ModelPort` interface and domain models. The CLI chooses the concrete model adapter at startup; the domain and application do not import provider SDKs.
+
+
+## Remote input and publication
+
+```sh
+uv run python -m intention_refiner --source github 'owner/repository#123'
+uv run python -m intention_refiner --source github https://github.com/owner/repository/issues/123 --publish
+uv run python -m intention_refiner --source jira TEAM-123 --publish
+uv run python -m intention_refiner --source jira https://team.atlassian.net/browse/TEAM-123
+```
+
+`--source` defaults to `file`. Each run reads one issue's title and description; comments,
+attachments, GitHub project draft cards, board discovery, batch commands, pull requests,
+and workflow transitions are outside this release. Jira rich text is converted to readable
+text, including paragraphs, lists, tables, code, mentions, and links. A title-only issue is
+valid; an empty title and description are rejected. Jira URLs must match the configured site.
+No temporary input file is required.
+
+Without `--publish`, remote runs are read-only. With it, the agent first saves YAML, then
+publishes a result comment, a clarification comment when applicable, and review labels.
+The original description remains unchanged. `CLARIFICATION` suggestions must be answerable
+questions and are grouped by field in the question comment. `MISSING_INFO` suggestions
+propose completion text for review; unknown extracted facts remain null.
+
+Agent comments have stable versioned markers and are updated only when their author matches
+the authenticated account. Reruns update existing agent comments; when questions disappear,
+the existing clarification comment is marked resolved. Duplicate owned markers fail
+explicitly rather than selecting an arbitrary comment. Concurrent publishers for the same
+issue are unsupported; serialize these jobs to avoid duplicate creation races.
+
+GitHub credentials need Issues read access to fetch requirements and Issues write access to
+create/update comments, create repository labels, and apply labels. Jira accounts need Browse
+Projects, Add Comments, Edit Own Comments, and Edit Issues permissions (including access under
+issue security). This CLI uses email/API-token Basic authentication for Jira Cloud; OAuth,
+scoped-token gateway routing, GitHub Enterprise, and Jira Data Center are outside this release.
+
+Use `--integration-config path/to/integrations.yaml` to customize label mappings:
+
+```yaml
+github:
+  defaults:
+    clarification: question
+    ai_review: help wanted
+  projects:
+    owner/repository:
+      ai_review: needs-review
+jira:
+  defaults:
+    clarification: question
+    ai_review: ai-review
+  projects:
+    TEAM:
+      clarification: needs-answer
+```
+
+Project mappings override provider defaults. A clarification label is applied for any
+`CLARIFICATION` suggestion. An AI-review label is applied for any `AI_ENHANCED` or `FEATURE_IDEA`
+suggestion, or any refinement proposal. Existing matching labels are reused; missing GitHub
+labels are created with color `7057ff`, while Jira labels are introduced through issue updates.
+Other labels are preserved, and labels are never automatically removed. Jira label names
+cannot contain whitespace. Names are validated before writes, and additions are verified.
+
+The source and publisher ports keep the application independent of HTTP clients and provider
+schemas. New providers implement both contracts and declare `comments` and `labels`
+capabilities; unsupported publication capabilities fail explicitly. Remote identifiers are
+strictly validated with Pydantic before they are recorded. Unknown additional response fields
+are allowed, but missing fields and changed identifier types are rejected.
+
+## HTTP resilience and publication failures
+
+HTTP clients have configurable 30-second timeouts, disabled redirects, and no automatic
+retries. Each provider account/site has one circuit breaker shared by its source and publisher
+adapters for the invocation. Five consecutive HTTP 429 responses open the circuit. A non-429
+response resets the closed-state streak; transport failures do not increment it.
+
+Open circuits reject requests immediately. The cooldown is 60 seconds, extended by a valid
+longer `Retry-After` value (seconds or HTTP date). After cooldown, only one half-open probe is
+allowed: success closes the circuit; failure reopens it. State is in memory, with a monotonic
+clock and guarded probes. Future batch runners must reuse the same adapter dependencies for
+a provider account/site; separate CLI processes do not share breaker state.
+
+Publishing stops at the first failure and exits with status 1. Diagnostics identify completed
+operations and the operation whose remote outcome may be uncertain. The YAML report remains
+available. Before rerunning an uncertain write, inspect the issue and allow any in-flight
+request to settle; comment discovery reconciles completed writes. Publication is not a remote
+transaction. Oversized comment payloads are rejected before writes instead of truncated;
+conservative UTF-8 JSON body limits are 65,536 bytes for GitHub and 32,767 bytes for Jira.
+
+## Integration metrics and operational runbook
+
+The OpenTelemetry meter `agent.integration.metrics` registers:
+
+| Instrument | Semantics | Attributes |
+| --- | --- | --- |
+| `publications_success_total` | One increment per fully completed publication | `provider=github\|jira` |
+| `publications_failed_total` | One increment per failed or partially completed publication | `provider`, `reason` |
+| `publication_payload_bytes` | Serialized UTF-8 JSON body bytes before each remote write; histogram unit `By` | `provider`, `operation=result\|clarification\|labels` |
+
+Failure reasons are bounded to `rate_limit`, `timeout`, `auth`, `circuit_open`, `validation`,
+`network`, `remote_error`, and `unsupported`. Read-only runs do not increment publication
+counters. One publication can contain several HTTP writes, but its outcome is counted once.
+Payload metrics describe attempted HTTP bodies, not report file sizes. Metrics exclude issue
+identifiers, URLs, credentials, and content. Trace failures record exception types only.
+
+Metrics are always instrumented, independently of OTLP tracing. The default
+`ConsoleMetricExporter` exports to stdout every 10 seconds, with a forced flush and SDK shutdown
+on all CLI exits. Console metrics appear alongside normal command output; this is an interim
+diagnostic format, not a stable archival format or active alerting backend. Telemetry export
+failures do not undo publication. Set `INTENTION_REFINER_METRICS_EXPORTER=otlp` and the standard
+OTLP variables when a collector becomes available; application instrumentation stays unchanged.
+
+Configure these alerts in the future centralized backend:
+
+| SLI / condition (per provider) | Threshold |
+| --- | --- |
+| Five-minute failure ratio: `increase(failed) / (increase(success) + increase(failed))` | Greater than 10%, at least 10 attempts in the window, sustained for five minutes |
+| Five-minute authentication failures (`reason=auth`) | At least one |
+| Five-minute circuit rejections (`reason=circuit_open`) | At least one |
+
+No attempts means no failure-ratio evaluation. Partial publications count as failures.
+Calculate increases separately for each process/resource series, account for counter resets,
+then sum across instances and failure reasons by provider. Do not sum raw cumulative snapshots
+or omit failure reasons from the ratio. Console output alone does not provide centralized
+five-minute windows. Dashboard provisioning and alert delivery are infrastructure follow-up.
+
+When an alert fires:
+
+1. Inspect sanitized provider, operation, failure reason, and completed/uncertain operations.
+2. For authentication failures, verify token validity, provider permissions, and issue access.
+3. For rate limits or circuit rejection, inspect provider limits and `Retry-After`; wait for
+   cooldown instead of immediately repeating writes.
+4. For validation failures, compare the response contract against provider API documentation
+   and update adapter validators before retrying.
+5. Inspect partial comments and labels on the issue, then rerun with the same account once
+   uncertain requests settle. Preserve the local YAML as the generated result.
