@@ -1,4 +1,4 @@
-from intention_refiner.adapters.integrations import PositiveId, RemoteModel
+from intention_refiner.adapters.requirements.integrations import PositiveId, RemoteModel
 
 
 class GitHubIdentity(RemoteModel):

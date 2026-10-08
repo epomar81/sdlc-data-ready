@@ -6,13 +6,13 @@ import httpx
 from githubkit import GitHub
 from githubkit.exception import RequestError, RequestFailed
 
-from intention_refiner.adapters.github_models import (
+from intention_refiner.adapters.requirements.github_models import (
     GitHubComment,
     GitHubIdentity,
     GitHubIssue,
 )
-from intention_refiner.adapters.integration_http import failure_reason
-from intention_refiner.adapters.integrations import (
+from intention_refiner.adapters.requirements.integration_http import failure_reason
+from intention_refiner.adapters.requirements.integrations import (
     AdapterDependencies,
     CommentUpdate,
     RemoteAdapter,

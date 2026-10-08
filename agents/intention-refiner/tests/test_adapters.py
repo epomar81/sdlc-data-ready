@@ -4,8 +4,8 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from intention_refiner.adapters.files import YamlReportWriter
-from intention_refiner.adapters.models import GeminiAdapter, NvidiaAdapter
+from intention_refiner.adapters.filesystem.files import YamlReportWriter
+from intention_refiner.adapters.llm.models import GeminiAdapter, NvidiaAdapter
 from intention_refiner.config import ModelConfig, Settings
 from intention_refiner.domain.models import Audit, RefinementReport, Requirement
 
@@ -56,7 +56,7 @@ def test_settings_reject_invalid_timeout(monkeypatch):
 def test_gemini_adapter_uses_configured_model():
     config = ModelConfig(api_key="secret", model="gemini-example", timeout_seconds=12)
     response = MagicMock(text="{\"ok\": true}", usage_metadata=MagicMock(prompt_token_count=7, candidates_token_count=4, total_token_count=11))
-    with patch("intention_refiner.adapters.models.genai.Client") as client:
+    with patch("intention_refiner.adapters.llm.models.genai.Client") as client:
         client.return_value.chats.create.return_value.send_message.return_value = response
 
         result = GeminiAdapter(config).generate("prompt")
@@ -73,7 +73,7 @@ def test_gemini_adapter_uses_configured_model():
 
 def test_gemini_adapter_includes_sdk_error_details():
     config = ModelConfig(api_key="secret", model="gemini-example", timeout_seconds=12)
-    with patch("intention_refiner.adapters.models.genai.Client") as client:
+    with patch("intention_refiner.adapters.llm.models.genai.Client") as client:
         client.return_value.chats.create.return_value.send_message.side_effect = RuntimeError("quota exceeded")
 
         with pytest.raises(RuntimeError, match="Gemini request failed: quota exceeded"):
@@ -82,7 +82,7 @@ def test_gemini_adapter_includes_sdk_error_details():
 
 def test_nvidia_adapter_uses_configured_model():
     config = ModelConfig(api_key="secret", model="nvidia-example", timeout_seconds=12)
-    with patch("intention_refiner.adapters.models.OpenAI") as client:
+    with patch("intention_refiner.adapters.llm.models.OpenAI") as client:
         client.return_value.chat.completions.create.return_value.choices = [MagicMock(message=MagicMock(content='{"ok": true}'))]
         client.return_value.chat.completions.create.return_value.usage = MagicMock(prompt_tokens=5, completion_tokens=3, total_tokens=8)
 

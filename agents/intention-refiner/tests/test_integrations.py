@@ -5,13 +5,16 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from intention_refiner.adapters.github import GitHubAdapter
-from intention_refiner.adapters.integration_http import CircuitBreaker, IntegrationError
-from intention_refiner.adapters.integrations import (
+from intention_refiner.adapters.requirements.github import GitHubAdapter
+from intention_refiner.adapters.requirements.integration_http import (
+    CircuitBreaker,
+    IntegrationError,
+)
+from intention_refiner.adapters.requirements.integrations import (
     AdapterDependencies,
     JiraAdapter,
 )
-from intention_refiner.adapters.rich_text import adf_to_text
+from intention_refiner.adapters.requirements.rich_text import adf_to_text
 from intention_refiner.application.integrations import (
     LoadRequirement,
     PublicationRequest,
@@ -211,7 +214,7 @@ def test_remote_contract_failure_is_sanitized():
 
 
 def test_file_source_stays_plain_text(tmp_path):
-    from intention_refiner.adapters.files import TextFileReader
+    from intention_refiner.adapters.filesystem.files import TextFileReader
 
     source = tmp_path / "idea.txt"
     source.write_text("Idea", encoding="utf-8")
@@ -596,7 +599,7 @@ def test_retry_after_http_date_and_invalid_value():
     from datetime import datetime, timedelta
     from email.utils import format_datetime
 
-    from intention_refiner.adapters.integration_http import retry_cooldown
+    from intention_refiner.adapters.requirements.integration_http import retry_cooldown
 
     assert retry_cooldown("invalid") == 60
     assert retry_cooldown("-1") == 60

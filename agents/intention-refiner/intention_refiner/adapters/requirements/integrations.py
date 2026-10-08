@@ -7,12 +7,12 @@ from urllib.parse import urlsplit
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from intention_refiner.adapters.integration_http import (
+from intention_refiner.adapters.requirements.integration_http import (
     CircuitBreaker,
     HttpRequest,
     IntegrationHttp,
 )
-from intention_refiner.adapters.rich_text import (
+from intention_refiner.adapters.requirements.rich_text import (
     adf_to_text,
     render_questions,
     render_result,

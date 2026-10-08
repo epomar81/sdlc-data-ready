@@ -7,14 +7,14 @@ from uuid import uuid4
 import httpx
 from pydantic import ValidationError
 
-from intention_refiner.adapters.files import TextFileReader, YamlReportWriter
-from intention_refiner.adapters.github import GitHubAdapter
-from intention_refiner.adapters.integration_http import CircuitBreaker
-from intention_refiner.adapters.integrations import (
+from intention_refiner.adapters.filesystem.files import TextFileReader, YamlReportWriter
+from intention_refiner.adapters.llm.models import ModelRequestError, build_model
+from intention_refiner.adapters.requirements.github import GitHubAdapter
+from intention_refiner.adapters.requirements.integration_http import CircuitBreaker
+from intention_refiner.adapters.requirements.integrations import (
     AdapterDependencies,
     JiraAdapter,
 )
-from intention_refiner.adapters.models import ModelRequestError, build_model
 from intention_refiner.application.integrations import (
     LoadRequirement,
     PublicationRequest,

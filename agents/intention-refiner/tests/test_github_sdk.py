@@ -3,9 +3,9 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from intention_refiner.adapters.github import GitHubAdapter
-from intention_refiner.adapters.integration_http import CircuitBreaker
-from intention_refiner.adapters.integrations import AdapterDependencies
+from intention_refiner.adapters.requirements.github import GitHubAdapter
+from intention_refiner.adapters.requirements.integration_http import CircuitBreaker
+from intention_refiner.adapters.requirements.integrations import AdapterDependencies
 from intention_refiner.config import IntegrationConfig
 from intention_refiner.domain.integration import SourceReference
 
@@ -56,7 +56,7 @@ def test_adapter_uses_sdk_issue_endpoint():
         httpx.Client(transport=httpx.MockTransport(lambda request: response)),
         CircuitBreaker(),
     )
-    with patch("intention_refiner.adapters.github.GitHub") as sdk:
+    with patch("intention_refiner.adapters.requirements.github.GitHub") as sdk:
         sdk.return_value.rest.issues.get.return_value.raw_response = response
         adapter = GitHubAdapter(dependencies)
         result = adapter.read(SourceReference("github", "acme/app#12"))
