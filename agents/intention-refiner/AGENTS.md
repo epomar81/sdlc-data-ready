@@ -15,6 +15,8 @@ than treating this statement as a substitute for them.
 
 ## Idiomatic Python Rules
 
+- **Logging** — use `DEBUG` only for deep troubleshooting, `INFO` for lifecycle events and important transactions, `WARNING` for anomalous conditions that do not stop the main flow, and `ERROR` for failed operations requiring attention. Emit JSON logs with `timestamp`, `level`, `event`, and `duration_ms`; keep event names concise and put searchable context in structured fields instead of long message strings. Suppress debug output, traces, verbose intermediate state, and all third-party log records; expose only concise structured application events. Redirect console telemetry output so it cannot bypass the JSON log stream.
+
 ## Standards Maintenance
 
 - When a user requests a best practice that this guide does not already require, add the agreed practice to this file as a concise, enforceable rule. Keep this guide aligned with the standards established during the work.

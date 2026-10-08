@@ -90,26 +90,42 @@ def main(argv: list[str] | None = None) -> int:
                 source=requirement.provenance,
             )
             YamlReportWriter().write(report, settings.output_path)
-            print(f"Report saved to {settings.output_path}")
+            logger.info(
+                "Report saved",
+                extra={"event": "report_saved", "output_path": str(settings.output_path)},
+            )
             if args.publish:
                 PublishRequirement(adapter, telemetry).execute(
                     PublicationRequest(source, report, labels)
                 )
-                print("Publication completed")
+                logger.info(
+                    "Publication completed",
+                    extra={"event": "publication_completed", "provider": source.provider},
+                )
         return 0
     except IntegrationError as exc:
         logger.error(
-            "Error: %s; completed operations: %s; uncertain operation: %s",
-            exc,
-            ",".join(exc.completed_operations) or "none",
-            exc.uncertain_operation or "none",
+            "Integration operation failed",
+            extra={
+                "event": "integration_operation_failed",
+                "error": str(exc),
+                "completed_operations": ",".join(exc.completed_operations) or "none",
+                "uncertain_operation": exc.uncertain_operation or "none",
+            },
         )
         return 1
     except ValidationError:
-        logger.error("Error: Invalid configuration or report contract")
+        logger.error(
+            "Configuration or report validation failed",
+            extra={"event": "validation_failed", "error_type": "ValidationError"},
+        )
         return 1
     except (OSError, ValueError, ModelRequestError) as exc:
-        logger.error("Error: %s", exc)
+        logger.error(
+            "Command failed: %s",
+            exc,
+            extra={"event": "command_failed", "error": str(exc), "error_type": type(exc).__name__},
+        )
         return 1
     finally:
         if telemetry is not None:

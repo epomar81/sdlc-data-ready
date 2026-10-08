@@ -108,7 +108,7 @@ def test_failed_model_request_records_sanitized_error_telemetry():
     assert "private" not in repr((telemetry.span_object.status, telemetry.requests))
 
 
-def test_refine_logs_token_usage_and_refinement_proposal_not_tags(caplog):
+def test_refine_logs_structured_request_summary_and_proposal_events(caplog):
     response = {"initiative": {}, "suggestions": [
         {"field_name": "target", "tag": "MISSING_INFO", "text": "Identify intended users."}
     ], "audit": {"ambiguities": [], "missing_information": [], "metric_gaps": [], "other_risks": []},
@@ -118,8 +118,13 @@ def test_refine_logs_token_usage_and_refinement_proposal_not_tags(caplog):
     with caplog.at_level(logging.INFO):
         RefineInitiative(FakeModel(model_response(response))).execute("Build an app")
 
-    assert "Prompt tokens: 12, Completion tokens: 8, Total tokens: 20" in caplog.text
-    assert "Refinement proposal: Field: target | Content: Online customers | Reason: Clarify the intended audience." in caplog.text
+    request_log = next(record for record in caplog.records if getattr(record, "event", None) == "model_request_completed")
+    assert request_log.prompt_tokens == 12
+    assert request_log.completion_tokens == 8
+    assert request_log.total_tokens == 20
+    proposal_log = next(record for record in caplog.records if getattr(record, "event", None) == "refinement_proposal_created")
+    assert proposal_log.field_name == "target"
+    assert not hasattr(proposal_log, "proposed_text")
     assert "Generated tag" not in caplog.text
 
 

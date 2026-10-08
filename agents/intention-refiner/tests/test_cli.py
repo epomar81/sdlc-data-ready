@@ -3,7 +3,7 @@ import logging
 from unittest.mock import patch
 
 from intention_refiner.cli import main
-from intention_refiner.console_logging import JsonLogFormatter
+from intention_refiner.console_logging import JsonLogFormatter, configure_logging
 
 
 class FakeModel:
@@ -19,11 +19,18 @@ class FakeModel:
 
 def test_json_log_formatter_emits_valid_json():
     record = logging.LogRecord("test", logging.ERROR, __file__, 1, "Failure: %s", ("unavailable",), None)
+    record.event = "operation_failed"
+    record.duration_ms = 12.5
 
-    assert json.loads(JsonLogFormatter().format(record)) == {
+    fields = json.loads(JsonLogFormatter().format(record))
+    assert fields == {
+        "timestamp": fields["timestamp"],
         "level": "error",
+        "event": "operation_failed",
+        "duration_ms": 12.5,
         "message": "Failure: unavailable",
     }
+    assert fields["timestamp"].endswith("Z")
 
 
 def test_json_log_formatter_includes_correlation_id():
@@ -31,13 +38,34 @@ def test_json_log_formatter_includes_correlation_id():
     record.correlation_id = "run-123"
 
     assert json.loads(JsonLogFormatter().format(record)) == {
+        "timestamp": json.loads(JsonLogFormatter().format(record))["timestamp"],
         "level": "info",
+        "event": "Started",
+        "duration_ms": None,
         "message": "Started",
         "correlation_id": "run-123",
     }
 
 
-def test_cli_writes_report(tmp_path, monkeypatch):
+def test_configured_logging_suppresses_library_and_debug_records(capsys):
+    configure_logging("run-123")
+
+    logging.getLogger("httpx").error("private transport details")
+    logging.getLogger("intention_refiner.test").debug("internal state")
+    logging.getLogger("intention_refiner.test").info(
+        "Operation completed",
+        extra={"event": "operation_completed", "duration_ms": 4},
+    )
+
+    output = capsys.readouterr()
+    records = [json.loads(line) for line in output.err.splitlines()]
+    assert len(records) == 1
+    assert records[0]["event"] == "operation_completed"
+    assert records[0]["duration_ms"] == 4
+    assert output.out == ""
+
+
+def test_cli_writes_report(tmp_path, monkeypatch, capsys):
     source = tmp_path / "idea.txt"
     source.write_text("Build a car reservation site")
     target = tmp_path / "report.yaml"
@@ -51,6 +79,7 @@ def test_cli_writes_report(tmp_path, monkeypatch):
 
     assert code == 0
     assert target.exists()
+    assert capsys.readouterr().out == ""
 
 
 def test_cli_generates_a_new_correlation_id_for_each_run(tmp_path, monkeypatch, caplog):

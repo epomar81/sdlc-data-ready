@@ -2,6 +2,7 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from io import StringIO
 from typing import Literal
 
 from opentelemetry import trace
@@ -50,7 +51,9 @@ class Telemetry:
         resource = Resource.create({"service.name": "intention-refiner"})
         self._tracer_provider = None
         metric_exporter = (
-            OTLPMetricExporter() if exporter == "otlp" else ConsoleMetricExporter()
+            OTLPMetricExporter()
+            if exporter == "otlp"
+            else ConsoleMetricExporter(out=StringIO())
         )
         reader = PeriodicExportingMetricReader(
             metric_exporter, export_interval_millis=10000
@@ -132,11 +135,17 @@ class Telemetry:
                 try:
                     provider.force_flush(timeout_millis=5000)
                 except Exception:  # noqa: BLE001 - exporter failures must not change the command result
-                    logging.getLogger(__name__).warning("Telemetry flush failed")
+                    logging.getLogger(__name__).warning(
+                        "Telemetry flush failed",
+                        extra={"event": "telemetry_flush_failed", "error_type": "ExporterError"},
+                    )
                 try:
                     provider.shutdown()
                 except Exception:  # noqa: BLE001 - exporter failures must not change the command result
-                    logging.getLogger(__name__).warning("Telemetry shutdown failed")
+                    logging.getLogger(__name__).warning(
+                        "Telemetry shutdown failed",
+                        extra={"event": "telemetry_shutdown_failed", "error_type": "ExporterError"},
+                    )
 
 
 def record_exception(span: Span, error: Exception) -> None:

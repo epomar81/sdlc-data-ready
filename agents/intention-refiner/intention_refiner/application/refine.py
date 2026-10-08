@@ -56,14 +56,24 @@ class RefineInitiative:
                 )
             )
         logger.info(
-            "Token usage: Prompt tokens: %d, Completion tokens: %d, Total tokens: %d",
-            response.prompt_tokens, response.completion_tokens, response.total_tokens,
+            "Model request completed",
+            extra={
+                "event": "model_request_completed",
+                "duration_ms": elapsed_ms,
+                "prompt_tokens": response.prompt_tokens,
+                "completion_tokens": response.completion_tokens,
+                "total_tokens": response.total_tokens,
+            },
         )
         payload = parse_response(response.text)
         for proposal in payload.refinement_proposals:
             logger.info(
-                "Refinement proposal: Field: %s | Content: %s | Reason: %s",
-                proposal.field_name, proposal.proposed_text, proposal.rationale,
+                "Refinement proposal created",
+                extra={
+                    "event": "refinement_proposal_created",
+                    "duration_ms": elapsed_ms,
+                    "field_name": proposal.field_name,
+                },
             )
         return RefinementResult(**payload.model_dump(), response_time_ms=elapsed_ms)
 

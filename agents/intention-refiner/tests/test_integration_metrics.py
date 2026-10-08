@@ -17,6 +17,7 @@ def test_metrics_exporter_default_console_and_flush():
     ):
         telemetry = Telemetry(False)
         exporter.assert_called_once()
+        assert "out" in exporter.call_args.kwargs
         telemetry.shutdown()
         provider.return_value.force_flush.assert_called_once()
         provider.return_value.shutdown.assert_called_once()
