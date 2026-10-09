@@ -4,30 +4,28 @@ Return one valid JSON object and no surrounding commentary. The application vali
   "initiative": {
     "id": null, "title": null, "problem_statement": null, "target": null,
     "business_value": null, "business_scope": null, "ex_scope": null,
-    "kpi": null, "desired_outcomes": null, "kpis_and_outcomes": null
+    "kpi": null, "desired_outcomes": null
   },
   "suggestions": [
-    {"field_name": "target", "tag": "MISSING_INFO", "text": "Specific question or proposed value for review"}
+    {"field_name": "target", "tag": "AI_ENHANCED", "text": "[IA ENHANCED] Proposed completion for review"}
   ],
   "audit": {
-    "ambiguities": [], "missing_information": [], "metric_gaps": [], "other_risks": []
-  },
-  "refinement_proposals": [
-    {"field_name": "kpi", "proposed_text": "Proposed replacement", "rationale": "Reason for the proposal"}
-  ]
+    "ambiguities": [], "missing_information": [], "other_risks": []
+  }
 }
 
-Extract only facts supported by the initiative text. Leave unknown or unclear fields null.
-Do not invent IDs, targets, scope exclusions, baselines, thresholds, or business outcomes.
-Put possible values and improvements in suggestions and refinement_proposals for human review.
-Every proposal and suggestion must identify one of the initiative field names above.
-Use suggestion tags MISSING_INFO, AI_ENHANCED, FEATURE_IDEA, or CLARIFICATION.
-Explain ambiguous phrases, missing facts, and metric problems in the audit arrays.
+Preserve every original ticket sentence verbatim in the appropriate initiative field; do not rewrite or omit original text. You may organize source text into distinct fields, but do not change its wording.
+When business value, expected impact, metrics, or operational alerts are absent, proactively draft reasonable completions using standard product logic and industry practices. Prefix every generated paragraph, metric, and alert with `[IA ENHANCED]` so generated content is clearly distinguished from source text.
+Do not invent IDs or state proposed targets, baselines, thresholds, or outcomes as established facts. Put generated completions in the corresponding initiative fields or suggestions for human review. Each suggestion must identify one of the initiative field names above and use an appropriate tag.
+Use suggestion tags AI_ENHANCED, FEATURE_IDEA, or CLARIFICATION. Every AI_ENHANCED completion must begin with `[IA ENHANCED]`.
+Put each ambiguity directly into a CLARIFICATION suggestion as a concise, actionable question for the initiative owner. Do not repeat ambiguity notes in the audit. Keep `missing_information` empty; record any operational alert recommendation in `other_risks` with the `[IA ENHANCED]` prefix.
 Suggest DORA metrics only when the initiative concerns software delivery performance.
 Write in the same language as the initiative. Empty arrays are valid when there are no findings.
 The final YAML report also has a `metadata` object containing `provider`, `model`, and `response_time_ms`; the application adds these values, so omit `metadata` from your JSON response.
 
 Every CLARIFICATION suggestion must be an explicit, answerable question for the initiative owner.
-Every MISSING_INFO suggestion must propose specific completion text for human review,
-not ask a question. Keep the corresponding extracted fact null when it is unknown;
-never present a proposed completion as an established fact.
+
+Give each initiative field a distinct purpose. Do not repeat sentences or paragraphs
+between fields and suggestions. State each KPI target in only
+one place; if it is already stated in the initiative, do not repeat it as a suggestion
+or missing-information item. Keep the title concise and do not copy it into other fields.

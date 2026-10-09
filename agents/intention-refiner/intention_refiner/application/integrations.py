@@ -28,7 +28,7 @@ class PublicationRequest:
         names = []
         if any(item.tag == "CLARIFICATION" for item in self.report.suggestions):
             names.append(self.labels.clarification)
-        if self.report.refinement_proposals or any(
+        if any(
             item.tag in {"AI_ENHANCED", "FEATURE_IDEA"}
             for item in self.report.suggestions
         ):

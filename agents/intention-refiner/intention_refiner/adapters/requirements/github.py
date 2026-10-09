@@ -5,6 +5,7 @@ from functools import wraps
 import httpx
 from githubkit import GitHub
 from githubkit.exception import RequestError, RequestFailed
+from pydantic import ValidationError
 
 from intention_refiner.adapters.requirements.github_models import (
     GitHubComment,
@@ -19,8 +20,11 @@ from intention_refiner.adapters.requirements.integrations import (
     RemoteLabel,
     validate_response,
 )
+from intention_refiner.adapters.requirements.rich_text import render_feedback_comment
+from intention_refiner.application.integrations import PublicationRequest
 from intention_refiner.domain.integration import (
     IntegrationError,
+    PublicationResult,
     RequirementInput,
     SourceProvenance,
     SourceReference,
@@ -137,6 +141,59 @@ class GitHubAdapter(RemoteAdapter):
             **self.repository_arguments(source),
             "issue_number": int(source.reference.split("#")[1]),
         }
+
+    @sdk_operation
+    def publish(self, request: PublicationRequest) -> PublicationResult:
+        source = self.normalize(request.source)
+        completed = []
+        uncertain = None
+        try:
+            body = render_feedback_comment(request.report)
+            self.validate_size(body)
+            labels = request.required_labels()
+            self.validate_labels(labels)
+
+            issue = validate_response(
+                self.sdk.rest.issues.get(**self.issue_arguments(source)).raw_response,
+                GitHubIssue,
+            )
+            if issue.pull_request is not None:
+                raise IntegrationError("validation", "issue identity or pull request")
+
+            author = self.current_author()
+            existing = None
+            for comment in self.comments(source):
+                if self.comment_author(comment) != author:
+                    continue
+                if self.comment_text(comment).startswith("### Suggested requirement"):
+                    if existing is not None:
+                        raise IntegrationError("validation", "duplicate agent comments")
+                    existing = comment
+            uncertain = "result"
+            result_id = self.upsert(source, CommentUpdate("result", body, existing))
+            completed.append("result")
+            uncertain = None
+
+            if labels:
+                uncertain = "labels"
+                self.ensure_labels(source, labels)
+                completed.append("labels")
+                uncertain = None
+            return PublicationResult(
+                provider="github",
+                identifier=source.reference,
+                result_comment_id=result_id,
+                completed_operations=tuple(completed),
+            )
+        except (ValidationError, ValueError, TypeError, RecursionError) as exc:
+            error = (
+                exc
+                if isinstance(exc, IntegrationError)
+                else IntegrationError("validation", "publication")
+            )
+            error.completed_operations = tuple(completed)
+            error.uncertain_operation = uncertain
+            raise error from None
 
     @sdk_operation
     def read(self, reference: SourceReference) -> RequirementInput:

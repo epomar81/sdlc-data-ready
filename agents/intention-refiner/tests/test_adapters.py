@@ -98,8 +98,8 @@ def test_yaml_writer_saves_structured_report(tmp_path):
     target = tmp_path / "report.yaml"
     report = RefinementReport(
         initiative=Requirement(title="Reserve cars"), suggestions=[],
-        audit=Audit(ambiguities=[], missing_information=[], metric_gaps=[], other_risks=[]),
-        refinement_proposals=[], provider="gemini", model="example", response_time_ms=1.5,
+        audit=Audit(ambiguities=[], missing_information=[], other_risks=[]),
+        provider="gemini", model="example", response_time_ms=1.5,
     )
 
     YamlReportWriter().write(report, target)

@@ -14,23 +14,15 @@ class DemoModel:
             "suggestions": [
                 {
                     "field_name": "target",
-                    "tag": "MISSING_INFO",
-                    "text": "Identify the intended customer group.",
+                    "tag": "AI_ENHANCED",
+                    "text": "[IA ENHANCED] Intended audience: customers booking services online.",
                 }
             ],
             "audit": {
                 "ambiguities": [],
-                "missing_information": ["target"],
-                "metric_gaps": [],
+                "missing_information": [],
                 "other_risks": [],
             },
-            "refinement_proposals": [
-                {
-                    "field_name": "target",
-                    "proposed_text": "Customers booking online.",
-                    "rationale": "The intended users were not specified.",
-                }
-            ],
         }
         return ModelResponse(
             text=json.dumps(response),

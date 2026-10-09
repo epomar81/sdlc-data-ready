@@ -108,11 +108,11 @@ The tool reads the process environment; it does not load `.env` files itself. To
 
 ## Console logging
 
-The command prints one JSON object per log line, with `level` and `message` fields. Each completed model request reports the exact prompt, completion, and total token counts returned by the provider. Each entry in `refinement_proposals` reports its field, proposed content, and rationale. Suggestion tags are not logged. The CLI logs each failure once at the command boundary and exits with status 1.
+The command prints one JSON object per log line, with `level` and `message` fields. Each completed model request reports the exact prompt, completion, and total token counts returned by the provider. Each suggestion logs its field and tag without logging its content. The CLI logs each failure once at the command boundary and exits with status 1.
 
 The model port returns both the generated text and provider usage metadata. Gemini usage comes from `usage_metadata`; NVIDIA usage comes from the chat completion's `usage` object. Token counts are kept in the model response and logged after the request succeeds. If a model request or response validation fails, the error propagates to the CLI and is logged once there.
 
-Run the self-contained demonstration from the repository root. It uses a local fake model, needs no API key, and prints representative token and refinement proposal logs:
+Run the self-contained demonstration from the repository root. It uses a local fake model, needs no API key, and prints representative token and suggestion logs:
 
 ```sh
 uv run python examples/logging_demo.py
@@ -122,7 +122,7 @@ Example output:
 
 ```text
 {"level": "info", "message": "Token usage: Prompt tokens: 120, Completion tokens: 45, Total tokens: 165"}
-{"level": "info", "message": "Refinement proposal: Field: target | Content: Customers booking online. | Reason: The intended users were not specified."}
+{"level": "info", "message": "Suggestion created", "event": "suggestion_created", "field_name": "target", "tag": "MISSING_INFO"}
 ```
 
 The demo's model adapter shows the response contract used by real adapters:
@@ -138,12 +138,11 @@ ModelResponse(
 
 ## Report
 
-The YAML report has five sections:
+The YAML report has four sections:
 
-- `initiative`: one requirement with `id`, `title`, `problem_statement`, `target`, `business_value`, `business_scope`, `ex_scope`, `kpi`, `desired_outcomes`, and `kpis_and_outcomes`.
+- `initiative`: one requirement with `id`, `title`, `problem_statement`, `target`, `business_value`, `business_scope`, `ex_scope`, `kpi`, and `desired_outcomes`.
 - `suggestions`: field-linked recommendations tagged `MISSING_INFO`, `AI_ENHANCED`, `FEATURE_IDEA`, or `CLARIFICATION`.
-- `audit`: lists of ambiguities, missing information, metric gaps, and other risks.
-- `refinement_proposals`: proposed replacement text, its field, and a rationale.
+- `audit`: lists of ambiguities, missing information, and other risks.
 - `metadata`: provider, model, model response time in milliseconds, and optional remote `source` provenance (`provider`, `identifier`, `url`). Local reports omit source provenance.
 
 The model generates the content, so a person should review its suggestions before treating them as requirements. DORA metrics are suggested only when the initiative concerns software delivery performance.
@@ -154,7 +153,7 @@ The package uses ports and adapters to keep the refinement workflow separate fro
 
 | Hexagonal role | Current module | Responsibility |
 | --- | --- | --- |
-| Domain | `intention_refiner/domain/models.py` | Validated initiative, suggestions, audit, proposals, and report types. |
+| Domain | `intention_refiner/domain/models.py` | Validated initiative, suggestions, audit, and report types. |
 | Application ports | `intention_refiner/application/ports.py` | Model generation, requirement loading, and issue publication contracts. |
 | Application use case | `intention_refiner/application/refine.py` | Builds the prompt, calls the model port, parses its JSON, and validates the result. |
 | Model adapters | `intention_refiner/adapters/models.py` | Gemini and NVIDIA implementations of the model port. |
@@ -229,7 +228,7 @@ jira:
 
 Project mappings override provider defaults. A clarification label is applied for any
 `CLARIFICATION` suggestion. An AI-review label is applied for any `AI_ENHANCED` or `FEATURE_IDEA`
-suggestion, or any refinement proposal. Existing matching labels are reused; missing GitHub
+suggestion. Existing matching labels are reused; missing GitHub
 labels are created with color `7057ff`, while Jira labels are introduced through issue updates.
 Other labels are preserved, and labels are never automatically removed. Jira label names
 cannot contain whitespace. Names are validated before writes, and additions are verified.

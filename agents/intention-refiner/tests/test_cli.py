@@ -12,8 +12,7 @@ class FakeModel:
         return ModelResponse(text=json.dumps({
             "initiative": {"title": "Reserve cars"},
             "suggestions": [],
-            "audit": {"ambiguities": [], "missing_information": [], "metric_gaps": [], "other_risks": []},
-            "refinement_proposals": [],
+            "audit": {"ambiguities": [], "missing_information": [], "other_risks": []},
         }), prompt_tokens=12, completion_tokens=8, total_tokens=20)
 
 

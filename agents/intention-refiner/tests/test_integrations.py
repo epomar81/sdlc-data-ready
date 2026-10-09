@@ -14,7 +14,10 @@ from intention_refiner.adapters.requirements.integrations import (
     AdapterDependencies,
     JiraAdapter,
 )
-from intention_refiner.adapters.requirements.rich_text import adf_to_text
+from intention_refiner.adapters.requirements.rich_text import (
+    adf_to_text,
+    render_feedback_comment,
+)
 from intention_refiner.application.integrations import (
     LoadRequirement,
     PublicationRequest,
@@ -251,28 +254,77 @@ def sample_report():
             {"field_name": "target", "tag": "CLARIFICATION", "text": "Who uses it?"},
             {
                 "field_name": "target",
-                "tag": "MISSING_INFO",
+                "tag": "AI_ENHANCED",
                 "text": "Consider customers.",
             },
+            {"field_name": "kpi", "tag": "AI_ENHANCED", "text": "Track weekly active users."},
         ],
         audit={
-            "ambiguities": [],
-            "missing_information": [],
-            "metric_gaps": [],
+            "ambiguities": ["Sharing permissions are unclear."],
+            "missing_information": ["Define the target audience."],
             "other_risks": [],
         },
-        refinement_proposals=[],
     )
+
+
+def test_feedback_comment_contains_only_proposed_changes_and_clarifications():
+    report = sample_report()
+    report.initiative.id = "REQ-123"
+    report.initiative.problem_statement = "Customers cannot book online."
+    content = render_feedback_comment(report)
+    assert content.startswith("### Suggested requirement")
+    assert "Consider customers." in content
+    assert "Track weekly active users." in content
+    assert "### Clarifications" in content
+    assert "Who uses it?" in content
+    assert "Quick Audit" not in content
+    assert "None detected" not in content
+    assert "Customers cannot book online." not in content
+    assert "Sharing permissions are unclear." not in content
+    assert "REQ-123" not in content
+    assert "REQ-123" not in content
+
+
+def test_github_publication_updates_issue_and_posts_each_suggestion_without_headers():
+    from unittest.mock import Mock
+
+    adapter = GitHubAdapter(github_dependencies(lambda request: None))
+    adapter.current_author = Mock(return_value=7)
+    adapter.comments = Mock(return_value=[])
+    adapter.sdk.rest.issues.get = Mock(return_value=Mock(raw_response=httpx.Response(
+        200, json={"id": 8, "number": 1, "title": "Old title", "body": "Original"}
+    )))
+    adapter.sdk.rest.issues.update = Mock()
+    comments = []
+    def create_comment(**kwargs):
+        comment = {"id": len(comments) + 1, "body": kwargs["body"], "user": {"id": 7}}
+        comments.append(comment)
+        return Mock(raw_response=httpx.Response(201, json=comment))
+    adapter.sdk.rest.issues.create_comment = Mock(side_effect=create_comment)
+    adapter.ensure_labels = Mock()
+
+    source = SourceReference("github", "acme/app#1")
+    adapter.publish(PublicationRequest(source, sample_report(), LabelPolicy().for_source(source)))
+
+    adapter.sdk.rest.issues.update.assert_not_called()
+    assert len(comments) == 1
+    assert comments[0]["body"].startswith("### Suggested requirement")
+    assert "### Clarifications" in comments[0]["body"]
 
 
 def test_github_publication_comments_labels_metrics_and_rerun():
     comments = []
     labels = []
     writes = []
+    issue = {"id": 10, "number": 1, "title": "Old", "body": "Original"}
 
     def handler(request):
         path = request.url.path
         body = json.loads(request.content) if request.content else None
+        if path == "/repos/acme/app/issues/1":
+            if request.method == "PATCH":
+                issue.update(body)
+            return httpx.Response(200, json=issue)
         if path == "/user":
             return httpx.Response(200, json={"id": 7})
         if request.method == "GET" and path.endswith("/comments"):
@@ -313,15 +365,15 @@ def test_github_publication_comments_labels_metrics_and_rerun():
     use_case = PublishRequirement(adapter, telemetry)
     result = use_case.execute(request)
     assert result.result_comment_id == 1
-    assert result.clarification_comment_id == 2
-    assert labels == ["question"]
-    assert "MISSING_INFO" in comments[0]["body"]
-    assert "Consider customers" not in comments[1]["body"]
+    assert result.clarification_comment_id is None
+    assert labels == ["question", "help wanted"]
+    assert len(comments) == 1
+    assert comments[0]["body"].startswith("### Suggested requirement")
     use_case.execute(request)
-    assert len(comments) == 2
+    assert len(comments) == 1
     assert len(telemetry.outcomes) == 2
     assert all(event.succeeded for event in telemetry.outcomes)
-    assert telemetry.payloads[0].size_bytes == len(writes[0].content)
+    assert issue["body"] == "Original"
 
 
 def test_jira_source_and_publication_204_labels():
@@ -392,25 +444,28 @@ def test_jira_source_and_publication_204_labels():
         )
     )
     assert result.result_comment_id == "1"
-    assert applied == ["question"]
+    assert applied == ["question", "ai-review"]
+    assert len(comments) == 1
+    assert adf_to_text(comments[0]["body"]).startswith("### Suggested requirement")
 
 
 def test_publication_partial_failure_counts_once():
     def handler(request):
+        if request.url.path.endswith("/issues/1") and request.method == "GET":
+            return httpx.Response(200, json={"id": 1, "number": 1, "title": "Old", "body": ""})
         if request.url.path == "/user":
             return httpx.Response(200, json={"id": 7})
-        if request.method == "GET":
+        if request.method == "GET" and request.url.path.endswith("/comments"):
             return httpx.Response(200, json=[])
-        if b"intention-refiner:clarification" in request.content:
+        if request.method == "GET" and "labels" in request.url.path:
             return httpx.Response(429)
-        return httpx.Response(
-            201,
-            json={
-                "id": 1,
-                "body": json.loads(request.content)["body"],
-                "user": {"id": 7},
-            },
-        )
+        if request.method == "POST" and "labels" in request.url.path:
+            return httpx.Response(429)
+        if request.url.path.endswith("/issues/1") and request.method == "PATCH":
+            return httpx.Response(200, json={"id": 1, "number": 1, **json.loads(request.content)})
+        if request.method == "POST":
+            return httpx.Response(201, json={"id": 2, "body": json.loads(request.content)["body"], "user": {"id": 7}})
+        raise AssertionError(str(request.url))
 
     telemetry = RecordingTelemetry()
     adapter = GitHubAdapter(github_dependencies(handler))
@@ -421,7 +476,7 @@ def test_publication_partial_failure_counts_once():
     with pytest.raises(IntegrationError) as error:
         PublishRequirement(adapter, telemetry).execute(request)
     assert error.value.completed_operations == ("result",)
-    assert error.value.uncertain_operation == "clarification"
+    assert error.value.uncertain_operation == "labels"
     assert len(telemetry.outcomes) == 1
     assert telemetry.outcomes[0].reason == "rate_limit"
 
@@ -490,7 +545,7 @@ def test_oversize_publication_fails_before_http():
         raise AssertionError("No HTTP requests allowed")
 
     report = sample_report()
-    report.initiative.problem_statement = "x" * 65536
+    report.suggestions[0].text = "x" * 65536
     source = SourceReference("github", "a/b#1")
     with pytest.raises(IntegrationError, match="payload size"):
         GitHubAdapter(github_dependencies(handler)).publish(
@@ -500,15 +555,15 @@ def test_oversize_publication_fails_before_http():
 
 def test_invalid_remote_id_after_result_reports_partial_progress():
     def handler(request):
-        if request.url.path == "/user":
+        path = request.url.path
+        if path == "/repos/a/b/issues/1":
+            return httpx.Response(200, json={"id": 1, "number": 1, "title": "Old", "body": ""})
+        if path == "/user":
             return httpx.Response(200, json={"id": 7})
-        if request.method == "GET":
+        if request.method == "GET" and path.endswith("/comments"):
             return httpx.Response(200, json=[])
         body = json.loads(request.content)["body"]
-        identifier = "private-value" if "clarification:v1" in body else 1
-        return httpx.Response(
-            201, json={"id": identifier, "body": body, "user": {"id": 7}}
-        )
+        return httpx.Response(201, json={"id": "private-value", "body": body, "user": {"id": 7}})
 
     telemetry = RecordingTelemetry()
     source = SourceReference("github", "a/b#1")
@@ -521,41 +576,49 @@ def test_invalid_remote_id_after_result_reports_partial_progress():
             )
         )
     assert error.value.reason == "validation"
-    assert error.value.completed_operations == ("result",)
+    assert error.value.completed_operations == ()
     assert "private-value" not in str(error.value)
     assert telemetry.outcomes[0].reason == "validation"
 
 
-def test_github_reconciles_questions_preserving_human_comments_and_labels():
+def test_github_publication_updates_issue_and_preserves_existing_comments():
     comments = [
         {
             "id": 1,
-            "body": "[intention-refiner:result:v1]\nHuman copy",
+            "body": "Human comment",
             "user": {"id": 8},
         },
         {
             "id": 2,
-            "body": "[intention-refiner:result:v1]\nOld result",
+            "body": "### Suggested requirement\n\nOld result",
             "user": {"id": 7},
         },
         {
             "id": 3,
-            "body": "[intention-refiner:clarification:v1]\nOld questions",
-            "user": {"id": 7},
+            "body": "Human clarification note",
+            "user": {"id": 8},
         },
     ]
     labels = ["bug"]
+    issue = {"id": 10, "number": 1, "title": "Old", "body": "Original"}
 
     def handler(request):
         path = request.url.path
+        if path == "/repos/a/b/issues/1":
+            if request.method == "PATCH":
+                issue.update(json.loads(request.content))
+            return httpx.Response(200, json=issue)
         if path == "/user":
             return httpx.Response(200, json={"id": 7})
         if path.endswith("/comments"):
-            return httpx.Response(200, json=comments)
-        if request.method == "PATCH":
-            comment = next(
-                item for item in comments if str(item["id"]) == path.rsplit("/", 1)[1]
-            )
+            if request.method == "GET":
+                return httpx.Response(200, json=comments)
+            body = json.loads(request.content)["body"]
+            comment = {"id": len(comments) + 1, "body": body, "user": {"id": 7}}
+            comments.append(comment)
+            return httpx.Response(201, json=comment)
+        if request.method == "PATCH" and "/comments/" in path:
+            comment = next(item for item in comments if str(item["id"]) == path.rsplit("/", 1)[1])
             comment["body"] = json.loads(request.content)["body"]
             return httpx.Response(200, json=comment)
         if "/labels/" in path:
@@ -569,13 +632,21 @@ def test_github_reconciles_questions_preserving_human_comments_and_labels():
     source = SourceReference("github", "a/b#1")
     report = sample_report()
     report.suggestions[0].tag = "AI_ENHANCED"
+    report.suggestions[0].text = "[IA ENHANCED] Who uses it?"
+    report.suggestions[1].text = "[IA ENHANCED] Consider customers."
+    report.suggestions[2].text = "[IA ENHANCED] Track weekly active users."
+    report.audit.missing_information.clear()
     result = GitHubAdapter(github_dependencies(handler)).publish(
         PublicationRequest(source, report, LabelPolicy().for_source(source))
     )
     assert result.result_comment_id == 2
-    assert result.clarification_comment_id == 3
-    assert "resolved" in comments[2]["body"]
-    assert comments[0]["body"].endswith("Human copy")
+    assert result.clarification_comment_id is None
+    assert issue["body"] == "Original"
+    assert issue["title"] == "Old"
+    assert len(comments) == 3
+    assert "Consider customers." in comments[1]["body"]
+    assert "Track weekly active users." in comments[1]["body"]
+    assert comments[0]["body"] == "Human comment"
     assert labels == ["bug", "help wanted"]
 
 

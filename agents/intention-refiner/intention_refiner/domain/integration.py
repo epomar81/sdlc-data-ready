@@ -42,7 +42,9 @@ class PublicationResult(BaseModel):
     identifier: str = Field(min_length=1)
     result_comment_id: int | str
     clarification_comment_id: int | str | None = None
-    completed_operations: tuple[Literal["result", "clarification", "labels"], ...]
+    completed_operations: tuple[
+        Literal["result", "clarification", "tag_comments", "labels"], ...
+    ]
 
     @model_validator(mode="after")
     def validate_identifiers(self):

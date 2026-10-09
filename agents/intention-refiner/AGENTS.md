@@ -30,6 +30,19 @@ than treating this statement as a substitute for them.
 - Keep Python modules inside a responsibility subpackage under `intention_refiner/adapters/`; do not add implementation modules directly in the adapters root.
 - Keep application-wide configuration in `intention_refiner/config.py` and observability in `intention_refiner/telemetry.py`; these are shared across layers rather than adapter implementations.
 
+## Refinement and Publication Rules
+
+- Validate and normalize the complete local YAML report before any remote publication. Never publish a report that has not passed local structure and content validation.
+- Keep initiative fields distinct: remove repeated sentences and paragraphs across fields and suggestions. State each KPI target in one place only.
+- Convert every ambiguity into a direct, actionable question tagged `CLARIFICATION`; serialized reports must not retain those items in `audit.ambiguities`.
+- Keep `schemas/initiative-report.schema.yaml`, the refinement prompt, local report normalization, and published report behavior aligned when changing the report contract.
+- The initiative report has no `kpis_and_outcomes` field; keep KPI definitions and targets in `kpi`, and intended results in `desired_outcomes`.
+- When business value, expected impact, metrics, or alerts are absent, proactively draft a reasonable completion, prefix generated content with `[IA ENHANCED]`, and leave `audit.missing_information` empty.
+- Preserve source ticket wording verbatim; distinguish any generated paragraph, metric, or alert with the `[IA ENHANCED]` prefix.
+- Put every proposed improvement in `suggestions` with an appropriate tag; the report has no separate refinement proposal section.
+- In each suggestion, put the classification only in the `tag` field; do not repeat tag labels or prefixes such as `[IA ENHANCED]` in `text`.
+- Publish refinement feedback as one additional structured comment with `Suggested requirement` and `Clarifications` sections. Build suggested requirement paragraphs from AI-enhanced and feature-idea suggestions, and list clarification-tagged questions separately. Omit unchanged, correct input points and empty sections; never overwrite or modify the source issue title or main requirement description.
+
 ## Coding Constraints
 
 - **Function arguments** — functions and methods must have at most 2 parameters (excluding python required conventions). If more data is needed, define a dedicated struct to carry the parameters; do not add a third bare argument under any circumstance.

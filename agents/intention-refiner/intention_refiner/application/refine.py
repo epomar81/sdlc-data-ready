@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 from contextlib import nullcontext
 from importlib.resources import files
@@ -7,7 +8,11 @@ from importlib.resources import files
 from pydantic import ValidationError
 
 from intention_refiner.application.ports import ModelPort
-from intention_refiner.domain.models import RefinementPayload, RefinementResult
+from intention_refiner.domain.models import (
+    RefinementPayload,
+    RefinementResult,
+    Suggestion,
+)
 from intention_refiner.telemetry import ModelRequestMetrics, Telemetry, record_exception
 
 logger = logging.getLogger(__name__)
@@ -66,13 +71,14 @@ class RefineInitiative:
             },
         )
         payload = parse_response(response.text)
-        for proposal in payload.refinement_proposals:
+        for suggestion in payload.suggestions:
             logger.info(
-                "Refinement proposal created",
+                "Suggestion created",
                 extra={
-                    "event": "refinement_proposal_created",
+                    "event": "suggestion_created",
                     "duration_ms": elapsed_ms,
-                    "field_name": proposal.field_name,
+                    "field_name": suggestion.field_name,
+                    "tag": suggestion.tag,
                 },
             )
         return RefinementResult(**payload.model_dump(), response_time_ms=elapsed_ms)
@@ -87,6 +93,69 @@ def parse_response(response: str) -> RefinementPayload:
         text = "\n".join(lines[1:-1])
     try:
         data = json.loads(text)
-        return RefinementPayload.model_validate(data)
+        payload = RefinementPayload.model_validate(data)
+        return normalize_payload(payload)
     except (json.JSONDecodeError, ValidationError, TypeError) as exc:
         raise InvalidModelResponse("Model returned invalid requirements JSON") from exc
+
+
+def normalize_payload(payload: RefinementPayload) -> RefinementPayload:
+    """Remove repeated report content and turn ambiguity notes into questions."""
+    initiative = payload.initiative.model_dump()
+    seen: set[str] = set()
+    for field_name, value in initiative.items():
+        if not isinstance(value, str):
+            continue
+        paragraphs = []
+        for paragraph in re.split(r"\n\s*\n", value.strip()):
+            normalized = _normalize_text(paragraph)
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                paragraphs.append(paragraph.strip())
+        initiative[field_name] = "\n\n".join(paragraphs) or None
+
+    suggestions = list(payload.suggestions)
+    for ambiguity in payload.audit.ambiguities:
+        question = ambiguity.strip()
+        if not question.endswith(("?", "؟")):
+            detail = question.rstrip(".!")
+            question = (
+                f"¿Podrías aclarar esto: {detail}?"
+                if any(character in detail.casefold() for character in "áéíóúñ¿")
+                else f"Could you clarify: {detail}?"
+            )
+        suggestions.append(
+            Suggestion(field_name=_ambiguity_field(ambiguity), tag="CLARIFICATION", text=question)
+        )
+
+    initiative_text = " ".join(
+        value for value in initiative.values() if isinstance(value, str) and value
+    )
+    initiative_normalized = _normalize_text(initiative_text)
+    suggestions = [
+        item for item in suggestions
+        if not (
+            item.field_name == "kpi"
+            and _normalize_text(item.text) in initiative_normalized
+        )
+    ]
+    return RefinementPayload(
+        initiative=initiative,
+        suggestions=suggestions,
+        audit=payload.audit.model_copy(update={"ambiguities": [], "missing_information": []}),
+    )
+
+
+def _normalize_text(value: str) -> str:
+    return " ".join(re.findall(r"\w+", value.casefold()))
+
+
+def _ambiguity_field(value: str) -> str:
+    text = value.casefold()
+    if any(word in text for word in ("metric", "kpi", "baseline", "threshold", "métrica", "indicador")):
+        return "kpi"
+    if any(word in text for word in ("user", "customer", "audience", "target", "usuario", "público", "cliente")):
+        return "target"
+    if any(word in text for word in ("scope", "include", "exclude", "permission", "public", "private", "alcance", "permiso", "públic", "privad")):
+        return "business_scope"
+    return "problem_statement"

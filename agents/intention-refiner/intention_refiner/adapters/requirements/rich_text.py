@@ -85,37 +85,20 @@ def text_to_adf(text: str) -> dict:
     }
 
 
-def render_result(report: RefinementReport) -> str:
-    lines = ["Refinement result", "", "Extracted requirement"]
-    lines.extend(
-        f"- {name}: {value if value is not None else 'Unknown'}"
-        for name, value in report.initiative.model_dump().items()
-    )
-    lines.extend(["", "Suggestions (proposed content for review)"])
-    lines.extend(
-        f"- [{item.tag}] {item.field_name}: {item.text}" for item in report.suggestions
-    )
-    lines.extend(["", "Audit"])
-    for name, values in report.audit.model_dump().items():
-        lines.extend(f"- {name}: {value}" for value in values)
-    lines.extend(["", "Refinement proposals (for review)"])
-    lines.extend(
-        f"- {item.field_name}: {item.proposed_text}\n  Rationale: {item.rationale}"
-        for item in report.refinement_proposals
-    )
-    return "\n".join(lines)
-
-
-def render_questions(report: RefinementReport) -> str | None:
-    questions = [item for item in report.suggestions if item.tag == "CLARIFICATION"]
-    if not questions:
-        return None
-    lines = ["Clarification requested", ""]
-    for field in dict.fromkeys(item.field_name for item in questions):
-        lines.append(f"{field}:")
-        lines.extend(
-            f"- [CLARIFICATION] {item.text}"
-            for item in questions
-            if item.field_name == field
-        )
+def render_feedback_comment(report: RefinementReport) -> str:
+    suggested = [
+        item.text.removeprefix("[IA ENHANCED]").strip()
+        for item in report.suggestions
+        if item.tag in {"AI_ENHANCED", "FEATURE_IDEA"}
+    ]
+    clarifications = [
+        item.text for item in report.suggestions if item.tag == "CLARIFICATION"
+    ]
+    lines = ["### Suggested requirement"]
+    for text in suggested:
+        lines.extend(["", text])
+    lines.append("")
+    lines.append("### Clarifications")
+    for question in clarifications:
+        lines.extend(["", f"- {question}"])
     return "\n".join(lines)

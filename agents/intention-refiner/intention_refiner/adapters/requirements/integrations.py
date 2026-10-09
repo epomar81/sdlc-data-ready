@@ -14,8 +14,7 @@ from intention_refiner.adapters.requirements.integration_http import (
 )
 from intention_refiner.adapters.requirements.rich_text import (
     adf_to_text,
-    render_questions,
-    render_result,
+    render_feedback_comment,
     text_to_adf,
 )
 from intention_refiner.application.integrations import PublicationRequest
@@ -147,48 +146,27 @@ class RemoteAdapter:
         uncertain = None
         try:
             # Preflight every rendered body before creating any remote state.
-            result_text = self.marked_text("result", render_result(request.report))
-            question_content = render_questions(request.report)
-            question_text = self.marked_text(
-                "clarification",
-                question_content
-                or "Clarifications resolved: no outstanding questions in the latest refinement.",
-            )
+            result_text = render_feedback_comment(request.report)
             self.validate_size(result_text)
-            self.validate_size(question_text)
             labels = request.required_labels()
             self.validate_labels(labels)
             author = self.current_author()
             comments = self.comments(source)
-            existing = {}
+            existing = None
             for comment in comments:
                 if self.comment_author(comment) != author:
                     continue
                 text = self.comment_text(comment)
-                for kind in ("result", "clarification"):
-                    if text.startswith(self.marker(kind)):
-                        if kind in existing:
-                            raise IntegrationError(
-                                "validation", "duplicate agent comments"
-                            )
-                        existing[kind] = comment
+                if text.startswith("### Suggested requirement"):
+                    if existing is not None:
+                        raise IntegrationError("validation", "duplicate agent comments")
+                    existing = comment
             uncertain = "result"
             result_id = self.upsert(
-                source, CommentUpdate("result", result_text, existing.get("result"))
+                source, CommentUpdate("result", result_text, existing)
             )
             completed.append("result")
             uncertain = None
-            question_id = None
-            if question_content or "clarification" in existing:
-                uncertain = "clarification"
-                question_id = self.upsert(
-                    source,
-                    CommentUpdate(
-                        "clarification", question_text, existing.get("clarification")
-                    ),
-                )
-                completed.append("clarification")
-                uncertain = None
             if labels:
                 uncertain = "labels"
                 self.ensure_labels(source, labels)
@@ -198,7 +176,6 @@ class RemoteAdapter:
                 provider=source.provider,
                 identifier=source.reference,
                 result_comment_id=result_id,
-                clarification_comment_id=question_id,
                 completed_operations=tuple(completed),
             )
         except (ValidationError, ValueError, TypeError, RecursionError) as exc:
@@ -210,12 +187,6 @@ class RemoteAdapter:
             error.completed_operations = tuple(completed)
             error.uncertain_operation = uncertain
             raise error from None
-
-    def marker(self, kind: str) -> str:
-        return f"[intention-refiner:{kind}:v1]"
-
-    def marked_text(self, kind: str, text: str) -> str:
-        return f"{self.marker(kind)}\n{text}"
 
     def validate_size(self, text: str) -> None:
         limit = 65536 if self.dependencies.config.provider == "github" else 32767

@@ -6,7 +6,7 @@ from intention_refiner.domain.integration import SourceProvenance
 
 RequirementField = Literal[
     "id", "title", "problem_statement", "target", "business_value", "business_scope",
-    "ex_scope", "kpi", "desired_outcomes", "kpis_and_outcomes",
+    "ex_scope", "kpi", "desired_outcomes",
 ]
 
 
@@ -24,33 +24,24 @@ class Requirement(StrictModel):
     ex_scope: str | None = None
     kpi: str | None = None
     desired_outcomes: str | None = None
-    kpis_and_outcomes: str | None = None
 
 
 class Suggestion(StrictModel):
     field_name: RequirementField
-    tag: Literal["MISSING_INFO", "AI_ENHANCED", "FEATURE_IDEA", "CLARIFICATION"]
+    tag: Literal["AI_ENHANCED", "FEATURE_IDEA", "CLARIFICATION"]
     text: str = Field(min_length=1)
 
 
 class Audit(StrictModel):
     ambiguities: list[str]
     missing_information: list[str]
-    metric_gaps: list[str]
     other_risks: list[str]
-
-
-class RefinementProposal(StrictModel):
-    field_name: RequirementField
-    proposed_text: str = Field(min_length=1)
-    rationale: str = Field(min_length=1)
 
 
 class RefinementPayload(StrictModel):
     initiative: Requirement
     suggestions: list[Suggestion]
     audit: Audit
-    refinement_proposals: list[RefinementProposal]
 
 
 class RefinementResult(RefinementPayload):

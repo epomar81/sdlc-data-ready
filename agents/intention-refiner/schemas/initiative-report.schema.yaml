@@ -1,16 +1,24 @@
 $schema: https://json-schema.org/draft/2020-12/schema
 title: Initiative Report
-description: Structured requirements refinement report produced by intention-refiner.
+description: >-
+  Structured requirements refinement report produced by intention-refiner. Initiative
+  fields must have distinct purposes and must not repeat sentences or paragraphs.
+  Each KPI target must appear in one place only across initiative content, suggestions,
+  and suggestions. Ambiguities are converted to CLARIFICATION questions and
+  therefore do not remain in the serialized audit. These semantic constraints are
+  enforced during report refinement because JSON Schema cannot detect paraphrase overlap.
 type: object
 additionalProperties: false
 required:
   - initiative
   - suggestions
   - audit
-  - refinement_proposals
   - metadata
 properties:
   initiative:
+    description: >-
+      Extracted initiative content. Keep problem, audience, value, scope, exclusions,
+      metrics, and outcomes in their corresponding fields without repeated prose.
     type: object
     additionalProperties: false
     required:
@@ -23,19 +31,32 @@ properties:
       - ex_scope
       - kpi
       - desired_outcomes
-      - kpis_and_outcomes
     properties:
       id: {type: [string, 'null']}
       title: {type: [string, 'null']}
       problem_statement: {type: [string, 'null']}
-      target: {type: [string, 'null']}
-      business_value: {type: [string, 'null']}
-      business_scope: {type: [string, 'null']}
-      ex_scope: {type: [string, 'null']}
-      kpi: {type: [string, 'null']}
-      desired_outcomes: {type: [string, 'null']}
-      kpis_and_outcomes: {type: [string, 'null']}
+      target:
+        type: [string, 'null']
+        description: Intended users or audience; do not repeat the problem statement.
+      business_value:
+        type: [string, 'null']
+        description: Business rationale or value; do not restate desired outcomes.
+      business_scope:
+        type: [string, 'null']
+        description: Work and capabilities included in the initiative.
+      ex_scope:
+        type: [string, 'null']
+        description: Explicitly excluded work.
+      kpi:
+        type: [string, 'null']
+        description: KPI definitions and targets; do not duplicate them in suggestions.
+      desired_outcomes:
+        type: [string, 'null']
+        description: Intended results, without repeating business value or KPI targets.
   suggestions:
+    description: >-
+      Human review items. CLARIFICATION items must be direct, actionable questions.
+      Do not repeat KPI targets already present in initiative content.
     type: array
     items:
       type: object
@@ -46,42 +67,39 @@ properties:
           $ref: '#/$defs/requirementField'
         tag:
           type: string
-          enum: [MISSING_INFO, AI_ENHANCED, FEATURE_IDEA, CLARIFICATION]
+          enum: [AI_ENHANCED, FEATURE_IDEA, CLARIFICATION]
         text:
           type: string
           minLength: 1
+      allOf:
+        - if:
+            properties:
+              tag: {const: CLARIFICATION}
+            required: [tag]
+          then:
+            properties:
+              text:
+                pattern: '(\?|؟)$'
+                description: A direct, actionable question ending with question punctuation.
   audit:
+    description: >-
+      Remaining audit findings. Ambiguities are converted to CLARIFICATION suggestions
+      before serialization, so this array must be empty in a refined report.
     type: object
     additionalProperties: false
-    required: [ambiguities, missing_information, metric_gaps, other_risks]
+    required: [ambiguities, missing_information, other_risks]
     properties:
       ambiguities:
         type: array
+        maxItems: 0
         items: {type: string}
       missing_information:
         type: array
-        items: {type: string}
-      metric_gaps:
-        type: array
+        maxItems: 0
         items: {type: string}
       other_risks:
         type: array
         items: {type: string}
-  refinement_proposals:
-    type: array
-    items:
-      type: object
-      additionalProperties: false
-      required: [field_name, proposed_text, rationale]
-      properties:
-        field_name:
-          $ref: '#/$defs/requirementField'
-        proposed_text:
-          type: string
-          minLength: 1
-        rationale:
-          type: string
-          minLength: 1
   metadata:
     type: object
     additionalProperties: false
@@ -115,4 +133,3 @@ $defs:
       - ex_scope
       - kpi
       - desired_outcomes
-      - kpis_and_outcomes
