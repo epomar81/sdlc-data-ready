@@ -4,8 +4,10 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
 from intention_refiner.telemetry import (
+    ModelRequestMetrics,
     PublicationMetrics,
     PublicationPayloadMetrics,
+    RunMetrics,
     Telemetry,
 )
 
@@ -45,6 +47,54 @@ def test_metrics_have_bounded_attributes_and_correct_values():
     payload = instruments["publication_payload_bytes"].data.data_points[0]
     assert payload.count == 1 and payload.sum == 5
     assert payload.attributes == {"provider": "github", "operation": "result"}
+    telemetry.shutdown()
+
+
+def test_run_metrics_record_outcomes_and_duration_with_bounded_attributes():
+    reader = InMemoryMetricReader()
+    provider = MeterProvider(metric_readers=[reader])
+    with patch("intention_refiner.telemetry.MeterProvider", return_value=provider):
+        telemetry = Telemetry(False)
+    telemetry.record_run(RunMetrics(1.25, True))
+    telemetry.record_run(RunMetrics(2.5, False, "integration_error"))
+
+    scopes = reader.get_metrics_data().resource_metrics[0].scope_metrics
+    scope = next(scope for scope in scopes if scope.scope.name == "intention_refiner")
+    instruments = {metric.name: metric for metric in scope.metrics}
+    runs = instruments["intention_refiner.runs"].data.data_points
+    assert {point.attributes["outcome"]: point.value for point in runs} == {
+        "success": 1,
+        "error": 1,
+    }
+    assert {point.attributes["outcome"] for point in runs} == {"success", "error"}
+    durations = instruments["intention_refiner.run.duration"].data.data_points
+    assert {point.attributes["outcome"]: point.sum for point in durations} == {
+        "success": 1.25,
+        "error": 2.5,
+    }
+    assert runs[0].attributes == {"outcome": "success"}
+    assert next(point for point in runs if point.attributes["outcome"] == "error").attributes == {
+        "outcome": "error",
+        "error_type": "integration_error",
+    }
+    telemetry.shutdown()
+
+
+def test_model_metrics_include_failures_and_provider_usage():
+    reader = InMemoryMetricReader()
+    provider = MeterProvider(metric_readers=[reader])
+    with patch("intention_refiner.telemetry.MeterProvider", return_value=provider):
+        telemetry = Telemetry(False)
+    telemetry.record_model_request(ModelRequestMetrics("gemini", "model-a", 0.5, True, 2, 3, 5))
+    telemetry.record_model_request(ModelRequestMetrics("gemini", "model-a", 0.25, False))
+
+    scopes = reader.get_metrics_data().resource_metrics[0].scope_metrics
+    scope = next(scope for scope in scopes if scope.scope.name == "intention_refiner")
+    instruments = {metric.name: metric for metric in scope.metrics}
+    assert sum(point.value for point in instruments["intention_refiner.model.requests"].data.data_points) == 2
+    assert sum(point.sum for point in instruments["intention_refiner.model.duration"].data.data_points) == 0.75
+    token_points = instruments["intention_refiner.model.tokens"].data.data_points
+    assert sum(point.value for point in token_points) == 10
     telemetry.shutdown()
 
 

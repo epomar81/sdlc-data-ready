@@ -312,6 +312,50 @@ def test_github_publication_updates_issue_and_posts_each_suggestion_without_head
     assert "### Clarifications" in comments[0]["body"]
 
 
+def test_github_publication_includes_every_suggestion_from_output_requirements():
+    from pathlib import Path
+    from unittest.mock import Mock
+
+    import yaml
+
+    from intention_refiner.domain.models import RefinementReport
+
+    document = yaml.safe_load(Path("output_requirements.yaml").read_text())
+    report = RefinementReport(
+        provider=document["metadata"]["provider"],
+        model=document["metadata"]["model"],
+        response_time_ms=document["metadata"]["response_time_ms"],
+        initiative=document["initiative"],
+        suggestions=document["suggestions"],
+        audit=document["audit"],
+    )
+    adapter = GitHubAdapter(github_dependencies(lambda request: None))
+    adapter.current_author = Mock(return_value=7)
+    adapter.comments = Mock(return_value=[])
+    adapter.sdk.rest.issues.get = Mock(return_value=Mock(raw_response=httpx.Response(
+        200, json={"id": 8, "number": 3, "title": "SEE", "body": "Original"}
+    )))
+    comments = []
+
+    def create_comment(**kwargs):
+        comments.append(kwargs["body"])
+        return Mock(raw_response=httpx.Response(
+            201,
+            json={"id": 1, "body": kwargs["body"], "user": {"id": 7}},
+        ))
+
+    adapter.sdk.rest.issues.create_comment = Mock(side_effect=create_comment)
+    adapter.ensure_labels = Mock()
+    source = SourceReference("github", "epomar81/sdlc-data-ready#3")
+    adapter.publish(PublicationRequest(source, report, LabelPolicy().for_source(source)))
+
+    assert len(comments) == 1
+    published = comments[0]
+    for suggestion in document["suggestions"]:
+        expected = suggestion["text"].removeprefix("[IA ENHANCED]").strip()
+        assert expected in published
+
+
 def test_github_publication_comments_labels_metrics_and_rerun():
     comments = []
     labels = []

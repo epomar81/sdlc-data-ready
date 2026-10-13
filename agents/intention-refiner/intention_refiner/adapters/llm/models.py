@@ -52,11 +52,17 @@ class NvidiaAdapter:
                 timeout=self.config.timeout_seconds,
                 max_retries=0,
             )
+            request = {
+                "model": self.config.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.2,
+            }
+            if self.config.model == "moonshotai/kimi-k3":
+                request["temperature"] = 1.0
+            else:
+                request["response_format"] = {"type": "json_object"}
             response = client.chat.completions.create(
-                model=self.config.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                response_format={"type": "json_object"},
+                **request,
             )
             content = response.choices[0].message.content
             if not content:

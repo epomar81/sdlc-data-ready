@@ -33,6 +33,13 @@ class ModelRequestMetrics:
 
 
 @dataclass(frozen=True)
+class RunMetrics:
+    duration_seconds: float
+    succeeded: bool
+    error_type: str | None = None
+
+
+@dataclass(frozen=True)
 class PublicationMetrics:
     provider: Provider
     succeeded: bool
@@ -86,6 +93,18 @@ class Telemetry:
         self._tokens = meter.create_counter(
             "intention_refiner.model.tokens", unit="{token}"
         )
+        self._runs = meter.create_counter("intention_refiner.runs")
+        self._run_duration = meter.create_histogram(
+            "intention_refiner.run.duration", unit="s"
+        )
+
+    def record_run(self, data: RunMetrics) -> None:
+        outcome = "success" if data.succeeded else "error"
+        attributes = {"outcome": outcome}
+        if data.error_type:
+            attributes["error_type"] = data.error_type
+        self._runs.add(1, attributes)
+        self._run_duration.record(data.duration_seconds, attributes)
 
     @contextmanager
     def span(self, name: str, attributes: dict[str, str]) -> Iterator[object]:

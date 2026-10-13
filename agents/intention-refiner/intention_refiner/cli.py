@@ -1,5 +1,6 @@
 import argparse
 import logging
+import time
 from contextlib import ExitStack
 from pathlib import Path
 from uuid import uuid4
@@ -25,7 +26,7 @@ from intention_refiner.config import LabelPolicy, Settings
 from intention_refiner.console_logging import configure_logging
 from intention_refiner.domain.integration import IntegrationError, SourceReference
 from intention_refiner.domain.models import RefinementReport
-from intention_refiner.telemetry import Telemetry
+from intention_refiner.telemetry import RunMetrics, Telemetry
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ def build_integration(dependencies: AdapterDependencies):
 
 
 def main(argv: list[str] | None = None) -> int:
+    run_started = time.perf_counter()
     correlation_id = str(uuid4())
     configure_logging(correlation_id)
     parser = argparse.ArgumentParser(
@@ -56,6 +58,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     telemetry = None
+    run_succeeded = False
+    error_type = None
     try:
         if args.publish and args.source == "file":
             raise ValueError("--publish requires a remote issue source")
@@ -102,8 +106,10 @@ def main(argv: list[str] | None = None) -> int:
                     "Publication completed",
                     extra={"event": "publication_completed", "provider": source.provider},
                 )
+        run_succeeded = True
         return 0
     except IntegrationError as exc:
+        error_type = "integration_error"
         logger.error(
             "Integration operation failed",
             extra={
@@ -115,12 +121,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     except ValidationError:
+        error_type = "validation_error"
         logger.error(
             "Configuration or report validation failed",
             extra={"event": "validation_failed", "error_type": "ValidationError"},
         )
         return 1
     except (OSError, ValueError, ModelRequestError) as exc:
+        error_type = "command_error"
         logger.error(
             "Command failed: %s",
             exc,
@@ -129,4 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     finally:
         if telemetry is not None:
+            telemetry.record_run(
+                RunMetrics(time.perf_counter() - run_started, run_succeeded, error_type)
+            )
             telemetry.shutdown()

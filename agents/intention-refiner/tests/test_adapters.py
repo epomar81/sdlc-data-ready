@@ -25,6 +25,17 @@ def test_settings_load_selected_provider_from_environment(monkeypatch):
     assert settings.telemetry_enabled is False
 
 
+def test_settings_select_nvidia_kimi_k3_from_environment(monkeypatch):
+    monkeypatch.setenv("INTENTION_REFINER_PROVIDER", "nvidia")
+    monkeypatch.setenv("INTENTION_REFINER_MODEL", "moonshotai/kimi-k3")
+    monkeypatch.setenv("INTENTION_REFINER_NVIDIA_API_KEY", "secret")
+
+    settings = Settings()
+
+    assert settings.provider == "nvidia"
+    assert settings.model_config_for_provider().model == "moonshotai/kimi-k3"
+
+
 def test_settings_can_enable_telemetry(monkeypatch):
     monkeypatch.setenv("INTENTION_REFINER_PROVIDER", "nvidia")
     monkeypatch.setenv("INTENTION_REFINER_MODEL", "example-model")
@@ -92,6 +103,29 @@ def test_nvidia_adapter_uses_configured_model():
     assert (result.prompt_tokens, result.completion_tokens, result.total_tokens) == (5, 3, 8)
     client.assert_called_once()
     assert client.return_value.chat.completions.create.call_args.kwargs["model"] == "nvidia-example"
+
+
+def test_nvidia_adapter_sends_kimi_k3_model_identifier():
+    config = ModelConfig(
+        api_key="secret", model="moonshotai/kimi-k3", timeout_seconds=12
+    )
+    with patch("intention_refiner.adapters.llm.models.OpenAI") as client:
+        client.return_value.chat.completions.create.return_value.choices = [
+            MagicMock(message=MagicMock(content='{"ok": true}'))
+        ]
+        client.return_value.chat.completions.create.return_value.usage = MagicMock(
+            prompt_tokens=5, completion_tokens=3, total_tokens=8
+        )
+
+        NvidiaAdapter(config).generate("prompt")
+
+    assert (
+        client.return_value.chat.completions.create.call_args.kwargs["model"]
+        == "moonshotai/kimi-k3"
+    )
+    request = client.return_value.chat.completions.create.call_args.kwargs
+    assert request["temperature"] == 1.0
+    assert "response_format" not in request
 
 
 def test_yaml_writer_saves_structured_report(tmp_path):

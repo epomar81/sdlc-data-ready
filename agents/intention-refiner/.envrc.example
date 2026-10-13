@@ -3,6 +3,11 @@ export INTENTION_REFINER_MODEL="your-gemini-model"
 export INTENTION_REFINER_GEMINI_API_KEY="replace-with-your-api-key"
 export INTENTION_REFINER_OUTPUT_PATH="output_requirements.yaml"
 
+# To use NVIDIA Kimi K3 instead, set these and remove or comment out the Gemini settings above:
+# export INTENTION_REFINER_PROVIDER="nvidia"
+# export INTENTION_REFINER_MODEL="moonshotai/kimi-k3"
+# export INTENTION_REFINER_NVIDIA_API_KEY="replace-with-your-nvidia-api-key"
+
 # Metrics are active even when OTLP tracing is disabled.
 export INTENTION_REFINER_METRICS_EXPORTER="console"
 export INTENTION_REFINER_INTEGRATION_TIMEOUT_SECONDS="30"

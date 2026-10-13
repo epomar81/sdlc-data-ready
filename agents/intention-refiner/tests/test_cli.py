@@ -1,5 +1,6 @@
 import json
 import logging
+from contextlib import nullcontext
 from unittest.mock import patch
 
 from intention_refiner.cli import main
@@ -79,6 +80,50 @@ def test_cli_writes_report(tmp_path, monkeypatch, capsys):
     assert code == 0
     assert target.exists()
     assert capsys.readouterr().out == ""
+
+
+def test_cli_records_one_end_to_end_run_on_success_and_failure(tmp_path, monkeypatch):
+    from intention_refiner.telemetry import RunMetrics
+
+    source = tmp_path / "idea.txt"
+    source.write_text("Build a car reservation site")
+    target = tmp_path / "report.yaml"
+    monkeypatch.setenv("INTENTION_REFINER_PROVIDER", "gemini")
+    monkeypatch.setenv("INTENTION_REFINER_MODEL", "example")
+    monkeypatch.setenv("INTENTION_REFINER_GEMINI_API_KEY", "secret")
+    monkeypatch.setenv("INTENTION_REFINER_OUTPUT_PATH", str(target))
+
+    class RecordingTelemetry:
+        def __init__(self):
+            self.runs = []
+
+        def span(self, name, attributes):
+            return nullcontext()
+
+        def record_run(self, metrics):
+            self.runs.append(metrics)
+
+        def record_model_request(self, metrics):
+            pass
+
+        def shutdown(self):
+            pass
+
+    telemetry = RecordingTelemetry()
+    with (
+        patch("intention_refiner.cli.Telemetry", return_value=telemetry),
+        patch("intention_refiner.cli.build_model", return_value=FakeModel()),
+    ):
+        assert main([str(source)]) == 0
+        assert main([str(tmp_path / "missing.txt")]) == 1
+
+    assert len(telemetry.runs) == 2
+    assert telemetry.runs[0].succeeded is True
+    assert telemetry.runs[0].error_type is None
+    assert telemetry.runs[1].succeeded is False
+    assert telemetry.runs[1].error_type == "command_error"
+    assert all(isinstance(metrics, RunMetrics) for metrics in telemetry.runs)
+    assert all(metrics.duration_seconds >= 0 for metrics in telemetry.runs)
 
 
 def test_cli_generates_a_new_correlation_id_for_each_run(tmp_path, monkeypatch, caplog):

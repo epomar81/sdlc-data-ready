@@ -53,7 +53,7 @@ make quality
 | Variable | Purpose |
 | --- | --- |
 | `INTENTION_REFINER_PROVIDER` | Required: `gemini` or `nvidia`. |
-| `INTENTION_REFINER_MODEL` | Required: model identifier accepted by the selected provider. |
+| `INTENTION_REFINER_MODEL` | Required: model identifier accepted by the selected provider. For NVIDIA Kimi K3, use `moonshotai/kimi-k3`. |
 | `INTENTION_REFINER_GEMINI_API_KEY` | Required when using Gemini. |
 | `INTENTION_REFINER_NVIDIA_API_KEY` | Required when using NVIDIA. |
 | `INTENTION_REFINER_TIMEOUT_SECONDS` | Optional request timeout; defaults to `120`. |
@@ -66,7 +66,27 @@ make quality
 | `INTENTION_REFINER_JIRA_API_TOKEN` | Required for Jira: site-compatible API token used with Basic authentication. |
 | `INTENTION_REFINER_INTEGRATION_TIMEOUT_SECONDS` | Positive per-request timeout for source and publication HTTP calls; defaults to `30`. |
 
-For OTLP export, configure the destination using the standard OpenTelemetry OTLP environment variables, such as `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`. The service name is `intention-refiner`. Each CLI invocation receives a correlation ID that appears in its JSON logs and root trace. The YAML report does not contain the correlation ID. Telemetry records operation status, provider/model, request duration, token counts, publication outcomes, and publication payload sizes; initiative text, prompts, generated responses, and exception messages are never recorded. Existing console logs are not exported as an OpenTelemetry log signal.
+For OTLP export, configure the destination using the standard OpenTelemetry OTLP environment variables, such as `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`. The service name is `intention-refiner`. Each CLI invocation receives a correlation ID that appears in its JSON logs and root trace. The YAML report does not contain the correlation ID. Telemetry records whole-run success/failure and duration, operation status, provider/model, model request duration, token counts, publication outcomes, and publication payload sizes. Initiative text, prompts, generated responses, exception messages, issue identifiers, and correlation IDs are never metric attributes.
+
+For Prometheus-compatible storage, send metrics to an OpenTelemetry Collector over OTLP, then expose the Collector's Prometheus exporter for scraping. The CLI exits after each run, so it does not host a stable Prometheus scrape endpoint. A minimal Collector metrics pipeline looks like this:
+
+```yaml
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:9464
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      exporters: [prometheus]
+```
+
+Configure Prometheus to scrape the Collector on port `9464`, and set `INTENTION_REFINER_METRICS_EXPORTER=otlp` and `OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318` for the CLI. The `intention_refiner.runs` counter is split by outcome (and a bounded error category for failures); calculate error rate from error runs divided by all runs. `intention_refiner.run.duration` measures full CLI duration, while `intention_refiner.model.duration` and `intention_refiner.model.tokens` report model-call latency and provider-reported usage.
 
 Example:
 
@@ -85,13 +105,22 @@ export INTENTION_REFINER_GEMINI_API_KEY=your-api-key
 intention-refiner path/to/initiative.txt
 ```
 
-The tool reads the process environment; it does not load `.env` files itself. To load settings automatically when entering the project directory, install [direnv](https://direnv.net/), copy `.envrc.example` to `.envrc`, replace the placeholder model and API key, then run `direnv allow` in the project directory. `.envrc` is ignored by Git so your local API key is not committed. The example uses Gemini; for NVIDIA, set `INTENTION_REFINER_PROVIDER="nvidia"` and `INTENTION_REFINER_NVIDIA_API_KEY` instead.
+The tool reads the process environment; it does not load `.env` files itself. To load settings automatically when entering the project directory, install [direnv](https://direnv.net/), copy `.envrc.example` to `.envrc`, replace the placeholder model and API key, then run `direnv allow` in the project directory. `.envrc` is ignored by Git so your local API key is not committed. The example uses Gemini; to use NVIDIA Kimi K3, select the `nvidia` provider and set `INTENTION_REFINER_MODEL="moonshotai/kimi-k3"` and `INTENTION_REFINER_NVIDIA_API_KEY`.
+
+NVIDIA Kimi K3 setup:
+
+```sh
+export INTENTION_REFINER_PROVIDER=nvidia
+export INTENTION_REFINER_MODEL=moonshotai/kimi-k3
+export INTENTION_REFINER_NVIDIA_API_KEY=your-nvidia-api-key
+intention-refiner path/to/initiative.txt
+```
 
 ## Console logging
 
 The command prints one JSON object per log line, with `level` and `message` fields. Each completed model request reports the exact prompt, completion, and total token counts returned by the provider. Each suggestion logs its field and tag without logging its content. The CLI logs each failure once at the command boundary and exits with status 1.
 
-The model port returns both the generated text and provider usage metadata. Gemini usage comes from `usage_metadata`; NVIDIA usage comes from the chat completion's `usage` object. Token counts are kept in the model response and logged after the request succeeds. If a model request or response validation fails, the error propagates to the CLI and is logged once there.
+The model port returns both the generated text and provider usage metadata. Gemini usage comes from `usage_metadata`; NVIDIA usage comes from the chat completion's `usage` object. Kimi K3 uses NVIDIA's recommended temperature and relies on the refinement prompt for JSON output; other NVIDIA models use JSON response formatting. Token counts are kept in the model response and logged after the request succeeds. If a model request or response validation fails, the error propagates to the CLI and is logged once there.
 
 Run the self-contained demonstration from the repository root. It uses a local fake model, needs no API key, and prints representative token and suggestion logs:
 
