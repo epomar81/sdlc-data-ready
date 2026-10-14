@@ -134,6 +134,36 @@ def test_make_run_passes_output_path() -> None:
         assert f'--output "{output}"' in result.stdout
 
 
+def test_make_run_can_opt_in_to_ticket_creation() -> None:
+    result = subprocess.run(
+        [
+            "make",
+            "--dry-run",
+            "run",
+            "FILE=input.yaml",
+            "CREATE_TICKETS=1",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--create-tickets" in result.stdout
+
+
+def test_make_run_does_not_create_tickets_by_default() -> None:
+    result = subprocess.run(
+        ["make", "--dry-run", "run", "FILE=input.yaml"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--create-tickets" not in result.stdout
+
+
 def test_make_run_reloads_envrc_before_starting_cli(tmp_path: Path) -> None:
     import os
 

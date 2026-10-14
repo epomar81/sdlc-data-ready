@@ -3,6 +3,8 @@
 FILE ?= $(STORY_SLICER_INPUT_PATH)
 SOURCE ?= $(STORY_SLICER_INPUT_SOURCE)
 OUTPUT ?= stories.json
+CREATE_TICKETS ?= 0
+TICKET_FLAG = $(if $(filter 1 true yes on,$(CREATE_TICKETS)),--create-tickets,)
 
 build:
 	uv build
@@ -26,7 +28,7 @@ run:
 		if [ -z "$$STORY_SLICER_INPUT_PATH" ]; then \
 			echo "Set STORY_SLICER_INPUT_PATH or use make run FILE=my_feature.yaml" >&2; exit 1; \
 		fi; \
-		uv run --locked python cli.py "$$STORY_SLICER_INPUT_PATH" --source "$$input_source" --output "$(OUTPUT)"; \
+		uv run --locked python cli.py "$$STORY_SLICER_INPUT_PATH" --source "$$input_source" --output "$(OUTPUT)" $(TICKET_FLAG); \
 	else \
-		uv run --locked python cli.py "$(FILE)" --source "$$input_source" --output "$(OUTPUT)"; \
+		uv run --locked python cli.py "$(FILE)" --source "$$input_source" --output "$(OUTPUT)" $(TICKET_FLAG); \
 	fi
