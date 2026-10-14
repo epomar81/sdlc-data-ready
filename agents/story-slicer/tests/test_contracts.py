@@ -30,11 +30,11 @@ class FakeFileSystem:
 
 
 def test_file_path_contract_and_port() -> None:
-    source = RequirementSource(path="requirements.yaml")
-    request = FileReadRequest(path=source.path, max_bytes=1024)
+    source = RequirementSource(reference="requirements.yaml")
+    request = FileReadRequest(path=source.reference, max_bytes=1024)
     filesystem: FileSystemPort = FakeFileSystem()
     assert asyncio.run(filesystem.read(request)) == b"requirements.yaml"
     with pytest.raises(ValidationError):
-        RequirementSource(path=" ")
+        RequirementSource(reference=" ")
     with pytest.raises(ValidationError):
-        FileReadRequest(path=source.path, max_bytes=0)
+        FileReadRequest(path=source.reference, max_bytes=0)

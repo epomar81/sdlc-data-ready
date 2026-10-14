@@ -2,9 +2,9 @@
 
 Story Slicer will turn product requirements into atomic, independent, valuable
 user stories guided by INVEST, with Gherkin acceptance criteria and strict
-Pydantic schemas. Domain models, ports, environment configuration, bounded file
-reads, Gemini/NVIDIA, OpenTelemetry, and the self-healing core engine are
-implemented. Invoke slicing with `await SliceRequirement(dependencies).execute(path)`.
+Pydantic schemas. Requirements can come from local YAML files or GitHub issues;
+generated stories are retained in JSON and can optionally be published as GitHub
+issues. Invoke slicing with `await SliceRequirement(dependencies).execute(source)`.
 
 ## Development
 
@@ -27,8 +27,10 @@ make quality
 
 To run the application, copy `.envrc.example` to `.envrc` if you do not already
 have one, then edit the exported `STORY_SLICER_GEMINI_API_KEY` and
-`STORY_SLICER_LLM_MODEL` with your credentials and model ID. `.envrc` is ignored
-by Git; `.envrc.example` contains placeholders.
+`STORY_SLICER_LLM_MODEL` with your credentials and model ID. To publish YAML
+stories without entering a repository on each run, set
+`STORY_SLICER_GITHUB_REPOSITORY=owner/repo` in `.envrc`. `.envrc` is ignored by
+Git; `.envrc.example` contains placeholders.
 
 With direnv installed and its shell hook enabled, run from the project root:
 
@@ -47,8 +49,10 @@ Create `my_feature.yaml` using the product input contract below, then run:
 make run
 ```
 
-The `.envrc` sets `STORY_SLICER_INPUT_PATH=my_feature.yaml` as the default input
-for `make run`. Edit this value to point to your YAML file. Relative paths resolve
+The `.envrc` sets `STORY_SLICER_INPUT_PATH=my_feature.yaml` and
+`STORY_SLICER_INPUT_SOURCE=yaml` as the defaults for `make run`. For YAML,
+change the path to your file. For GitHub, set the source to `github` and the
+input path to an issue URL or `owner/repo#number`. Relative YAML paths resolve
 from your terminal's current directory; absolute paths are also supported.
 After editing `.envrc`, reload it with direnv or `source .envrc`.
 
@@ -57,10 +61,12 @@ project root with the Makefile:
 
 ```sh
 make run FILE=requirements/checkout.yaml
+make run SOURCE=github FILE=octo/shop#123
 ```
 
 The `run` target executes `uv run --locked python cli.py` with the configured
-path. An explicit `FILE=...` overrides `STORY_SLICER_INPUT_PATH` for that run.
+source and input. `SOURCE=...` and `FILE=...` override
+`STORY_SLICER_INPUT_SOURCE` and `STORY_SLICER_INPUT_PATH` for that run.
 The run target reloads the project-root `.envrc` before starting the CLI, so edits
 to provider settings override stale terminal values. It uses the source checkout, so
 you do not need to build the package or activate `.venv` first.
@@ -74,6 +80,27 @@ CLI's `--output` (`-o`) option:
 make run OUTPUT=results/stories.json
 uv run --locked python cli.py my_feature.yaml --output results/stories.json
 ```
+
+To read a GitHub issue, set `STORY_SLICER_GITHUB_TOKEN` and pass an issue URL or
+`owner/repo#number` reference:
+
+```sh
+uv run --locked python cli.py octo/shop#123 --source github
+```
+
+Ticket creation is opt-in. GitHub input publishes to its source repository by
+default; pass `--target-repo owner/repo` to choose another destination. YAML
+input uses `STORY_SLICER_GITHUB_REPOSITORY` by default and can be overridden
+with `--target-repo`. Each publish run creates new issues.
+The complete story JSON is saved before ticket creation starts, so it remains
+available if publishing fails:
+
+```sh
+uv run --locked python cli.py octo/shop#123 --source github --create-tickets
+uv run --locked python cli.py requirements.yaml --create-tickets
+```
+
+Use `--target-repo octo/shop` on a run to override the configured destination.
 
 You can also test and run without Make or activating the virtual environment:
 
@@ -114,7 +141,7 @@ function signatures.
 | --- | --- | --- |
 | Domain | `story_slicer.domain.models` | Requirement, story, scenario, metadata, and final-batch validation. |
 | Ports and contracts | `story_slicer.ports` | Provider-neutral protocols, requests/results, runtime settings, telemetry events, and shared errors. |
-| Adapters | `story_slicer.adapters` | Environment configuration, bounded local file reads, safe YAML parsing, Gemini/NVIDIA HTTP APIs, and OpenTelemetry. |
+| Adapters | `story_slicer.adapters` | Environment configuration, bounded YAML reads, safe YAML parsing, GitHub issue input and story publishing, Gemini/NVIDIA HTTP APIs, and OpenTelemetry. |
 | Application | `story_slicer.application` | Prompts, ID assignment, bounded self-healing, deadlines, and session lifecycle. |
 
 Domain dependencies are limited to Pydantic and Python's standard library.
@@ -135,20 +162,26 @@ After changing `.envrc`, reload it with `source .envrc` or `direnv allow`.
 
 ## Product input contract
 
-`RequirementDocument` describes YAML product input. The engine reads the requested
-file through `FileSystemPort`, then decodes/parses its bytes through
-`RequirementParserPort`. `YamlRequirementParser` uses a safe UTF-8 YAML loader and
-rejects duplicate keys, multiple documents, unsupported tags, and invalid input
+`RequirementDocument` is the shared product input model. The requirement input
+adapter loads either YAML or a GitHub issue. For YAML, `YamlRequirementParser`
+uses a safe UTF-8 YAML loader and rejects duplicate keys, multiple documents,
+unsupported tags, and invalid input
 schemas. Parsing errors become `InputError` with YAML line/column locations or
 schema field paths and validation messages, without displaying input values or
 source excerpts. List indices in field paths are zero-based (for example,
 `requirements.0.description`). The CLI prints these details to stderr.
 
-Input requires an explicit file path: `RequirementSource(path="requirements.yaml")`.
-Absolute paths are used directly, and relative paths resolve against the process
-working directory. The Makefile passes `STORY_SLICER_INPUT_PATH` from `.envrc`
-as this explicit path unless `FILE=...` overrides it. Direct CLI calls still
-require a path argument. There is no directory scanning.
+The GitHub adapter fetches issues through the GitHub API using the configured
+token and request timeout. Pull requests, mismatched issue numbers, and issues
+with neither a title nor a body are rejected. The issue title becomes the
+requirement description, its body becomes context, and the repository name
+provides the story ID prefix.
+
+Input requires an explicit reference. YAML remains the default, so a positional
+path such as `requirements.yaml` retains the existing behavior. Use
+`--source github` with `owner/repo#number` or a GitHub issue URL to load an issue.
+YAML relative paths resolve against the process working directory. The Makefile
+continues to pass `STORY_SLICER_INPUT_PATH` as a YAML path.
 
 ```yaml
 project: SHOP

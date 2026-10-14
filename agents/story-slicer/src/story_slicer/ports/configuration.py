@@ -26,6 +26,8 @@ class RuntimeSettings(ContractModel):
     nvidia_base_url: HttpUrl | None
     openai_api_key: SecretStr | None = None
     openai_base_url: HttpUrl | None = None
+    github_api_token: SecretStr | None = None
+    github_repository: NonBlank | None = None
     max_retries: NonNegativeInteger
     request_timeout_seconds: PositiveSeconds
     session_timeout_seconds: PositiveSeconds

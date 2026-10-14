@@ -11,7 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
     [
         ("build", "uv build"),
         ("test", "uv run --locked pytest"),
-        ("run", 'uv run --locked python cli.py "my feature.yaml"'),
+        (
+            "run",
+            'uv run --locked python cli.py "my feature.yaml" --source "$input_source"',
+        ),
     ],
 )
 def test_make_targets_use_uv(target: str, expected: str) -> None:
@@ -54,7 +57,10 @@ def test_make_run_uses_configured_input_path() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert 'uv run --locked python cli.py "requirements/input.yaml"' in result.stdout
+    assert (
+        'uv run --locked python cli.py "requirements/input.yaml" '
+        '--source "$input_source"' in result.stdout
+    )
 
 
 def test_make_run_explicit_file_overrides_configured_path() -> None:
@@ -72,7 +78,32 @@ def test_make_run_explicit_file_overrides_configured_path() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert 'uv run --locked python cli.py "override.yaml"' in result.stdout
+    assert (
+        'uv run --locked python cli.py "override.yaml" --source "$input_source"'
+        in result.stdout
+    )
+
+
+def test_make_run_accepts_github_source_and_issue_reference() -> None:
+    result = subprocess.run(
+        [
+            "make",
+            "--dry-run",
+            "run",
+            "SOURCE=github",
+            "FILE=octo/shop#123",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert 'input_source="github"' in result.stdout
+    assert (
+        'uv run --locked python cli.py "octo/shop#123" --source "$input_source"'
+        in result.stdout
+    )
 
 
 def test_make_quality_runs_lint_and_tests() -> None:
@@ -109,6 +140,7 @@ def test_make_run_reloads_envrc_before_starting_cli(tmp_path: Path) -> None:
     (tmp_path / ".envrc").write_text(
         "export STORY_SLICER_GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta\n"
         "export STORY_SLICER_INPUT_PATH=current.yaml\n"
+        "export STORY_SLICER_INPUT_SOURCE=github\n"
     )
     uv = tmp_path / "uv"
     uv.write_text(
@@ -116,6 +148,7 @@ def test_make_run_reloads_envrc_before_starting_cli(tmp_path: Path) -> None:
         'test "$STORY_SLICER_GEMINI_BASE_URL" = '
         '"https://generativelanguage.googleapis.com/v1beta" || exit 9\n'
         'test "$5" = "current.yaml" || exit 10\n'
+        'test "$7" = "github" || exit 11\n'
     )
     uv.chmod(0o755)
     result = subprocess.run(

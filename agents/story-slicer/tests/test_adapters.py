@@ -312,6 +312,13 @@ def test_empty_inactive_provider_credentials_are_ignored() -> None:
     assert settings.nvidia_api_key is None and settings.nvidia_base_url is None
 
 
+def test_environment_configuration_loads_optional_github_repository() -> None:
+    settings = EnvironmentConfiguration(
+        environment() | {"STORY_SLICER_GITHUB_REPOSITORY": "acme/shop"}
+    ).load()
+    assert settings.github_repository == "acme/shop"
+
+
 def test_missing_selected_provider_credential_is_reported_clearly() -> None:
     variables = environment() | {"STORY_SLICER_GEMINI_API_KEY": ""}
     with pytest.raises(ConfigurationError, match="STORY_SLICER_GEMINI_API_KEY"):

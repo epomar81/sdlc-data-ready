@@ -12,7 +12,6 @@ from story_slicer.application.slice_requirement import (
 from story_slicer.domain.models import RequirementDocument, Story
 from story_slicer.ports.configuration import ConfigurationPort, RuntimeSettings
 from story_slicer.ports.errors import ValidationExhaustedError
-from story_slicer.ports.filesystem import FileReadRequest, FileSystemPort
 from story_slicer.ports.llm import GenerationResult, LLMPort, TokenUsage
 from story_slicer.ports.observability import (
     CriticalAlert,
@@ -23,27 +22,22 @@ from story_slicer.ports.observability import (
     SessionCompleted,
     SessionHandle,
 )
-from story_slicer.ports.requirements import RequirementParserPort
+from story_slicer.ports.requirements import RequirementInputPort, RequirementSource
 from tests.fixtures import settings_data, story_data
 
 
 def dependencies() -> SlicingDependencies:
     configuration = Mock(spec=ConfigurationPort)
     configuration.load.return_value = RuntimeSettings.model_validate(settings_data())
-    filesystem = AsyncMock(spec=FileSystemPort)
-    filesystem.read.return_value = (
-        b"project: SHOP\nrequirements:\n  - description: Track orders\n"
-    )
-    parser = Mock(spec=RequirementParserPort)
-    parser.parse.return_value = RequirementDocument.model_validate(
+    loader = AsyncMock(spec=RequirementInputPort)
+    loader.load.return_value = RequirementDocument.model_validate(
         {"project": "SHOP", "requirements": [{"description": "Track orders"}]}
     )
     observability = Mock(spec=ObservabilityPort)
     observability.start_session.return_value = SessionHandle(session_id="session")
     return SlicingDependencies(
         configuration=configuration,
-        filesystem=filesystem,
-        parser=parser,
+        requirement_loader=loader,
         llm=AsyncMock(spec=LLMPort),
         observability=observability,
     )
@@ -63,18 +57,16 @@ def test_valid_first_attempt() -> None:
 
     assert [story.ID for story in batch.stories] == ["SHOP-1", "SHOP-2"]
     assert all(isinstance(story, Story) for story in batch.stories)
-    assert isinstance(ports.filesystem, AsyncMock)
-    ports.filesystem.read.assert_awaited_once_with(
-        FileReadRequest(path="product/requirements.yaml", max_bytes=65536)
+    assert isinstance(ports.requirement_loader, AsyncMock)
+    ports.requirement_loader.load.assert_awaited_once_with(
+        RequirementSource(reference="product/requirements.yaml")
     )
-    assert isinstance(ports.parser, Mock)
-    ports.parser.parse.assert_called_once_with(ports.filesystem.read.return_value)
     assert isinstance(ports.configuration, Mock)
     ports.configuration.load.assert_called_once()
     llm.generate.assert_awaited_once()
     request = llm.generate.call_args.args[0]
     assert request.repair_feedback is None
-    assert request.requirement == ports.parser.parse.return_value
+    assert request.requirement == ports.requirement_loader.load.return_value
     assert isinstance(ports.observability, Mock)
     ports.observability.start_session.assert_called_once()
     events = [call.args[0] for call in ports.observability.record.call_args_list]

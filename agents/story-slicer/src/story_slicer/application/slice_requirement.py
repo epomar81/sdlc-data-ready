@@ -17,7 +17,6 @@ from story_slicer.ports.errors import (
     SessionTimeoutError,
     ValidationExhaustedError,
 )
-from story_slicer.ports.filesystem import FileReadRequest, FileSystemPort
 from story_slicer.ports.llm import (
     GenerationRequest,
     GenerationResult,
@@ -37,14 +36,13 @@ from story_slicer.ports.observability import (
     SessionHandle,
     SessionOutcome,
 )
-from story_slicer.ports.requirements import RequirementParserPort, RequirementSource
+from story_slicer.ports.requirements import RequirementInputPort, RequirementSource
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SlicingDependencies:
     configuration: ConfigurationPort
-    filesystem: FileSystemPort
-    parser: RequirementParserPort
+    requirement_loader: RequirementInputPort
     llm: LLMPort
     observability: ObservabilityPort
 
@@ -85,25 +83,24 @@ class SliceRequirement:
         self._ports = dependencies
         self._settings = dependencies.configuration.load()
 
-    async def execute(self, path: str) -> StoryBatch:
+    async def execute(self, source: RequirementSource | str) -> StoryBatch:
         try:
-            source = RequirementSource(path=path)
+            source = (
+                source
+                if isinstance(source, RequirementSource)
+                else RequirementSource(reference=source)
+            )
         except ValidationError:
             raise InputError(
-                "An explicit nonblank requirement file path is required"
+                "An explicit nonblank requirement source is required"
             ) from None
         try:
             content = await asyncio.wait_for(
-                self._ports.filesystem.read(
-                    FileReadRequest(
-                        path=source.path,
-                        max_bytes=self._settings.max_input_bytes,
-                    )
-                ),
+                self._ports.requirement_loader.load(source),
                 timeout=self._settings.session_timeout_seconds,
             )
         except TimeoutError:
-            raise SessionTimeoutError("Requirement file read timed out") from None
+            raise SessionTimeoutError("Requirement loading timed out") from None
         started = perf_counter()
         handle = self._ports.observability.start_session(
             SessionContext(
@@ -114,8 +111,7 @@ class SliceRequirement:
         session = _Session(handle=handle)
         try:
             async with asyncio.timeout(self._settings.session_timeout_seconds):
-                requirement = self._ports.parser.parse(content)
-                result = await self._slice(requirement, session)
+                result = await self._slice(content, session)
             session.outcome = "success"
             return result
         except InputError:

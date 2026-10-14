@@ -2,7 +2,10 @@
 
 ## What This Project Does
 
-This involves reading a requirement and converting it into a user story—or multiple stories, depending on the initial requirement.
+This project reads product requirements from a YAML file or a GitHub issue and
+converts them into one or more user stories. It always saves the complete story
+batch as JSON. When explicitly requested, it can also create a GitHub issue for
+each generated story.
 
 ## Your Role
 
@@ -38,3 +41,24 @@ than treating this statement as a substitute for them.
 - If a target cannot run, report the command and reason; do not claim verification
   passed or the work is fully verified.
 - In the final response, report the result of both `make lint` and `make test`.
+
+## Product Workflow
+
+- Keep YAML as the default input source and preserve the existing positional
+  file-path invocation. GitHub issues are selected explicitly with
+  `--source github` and may be referenced as `owner/repo#number` or an issue URL.
+  The Makefile `run` target must expose the source selector as `SOURCE` and
+  accept the input through `FILE`.
+- Load all requirement sources through `RequirementInputPort` and normalize
+  them to `RequirementDocument`. Keep source-specific HTTP and filesystem work
+  in adapters; keep story slicing independent of GitHub and YAML details.
+- Read the GitHub token from `STORY_SLICER_GITHUB_TOKEN`. Use the injected
+  `httpx` client and configured request timeout. Convert GitHub failures to
+  concise errors without including raw response bodies or credentials.
+- Story ticket creation is opt-in through `--create-tickets`. GitHub input uses
+  its source repository by default. YAML input uses
+  `STORY_SLICER_GITHUB_REPOSITORY` by default, with `--target-repo` as a
+  per-run override. Save the full `StoryBatch` JSON before publishing, and
+  report partial ticket failures without deleting or replacing that JSON.
+- Do not add duplicate detection for story tickets unless the user requests it;
+  each explicit publishing run creates new issues.

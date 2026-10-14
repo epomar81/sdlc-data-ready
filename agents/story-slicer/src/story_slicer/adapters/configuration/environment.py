@@ -17,6 +17,8 @@ ENVIRONMENT_FIELDS = {
     "nvidia_base_url": "STORY_SLICER_NVIDIA_BASE_URL",
     "openai_api_key": "STORY_SLICER_OPENAI_API_KEY",
     "openai_base_url": "STORY_SLICER_OPENAI_BASE_URL",
+    "github_api_token": "STORY_SLICER_GITHUB_TOKEN",
+    "github_repository": "STORY_SLICER_GITHUB_REPOSITORY",
     "max_retries": "STORY_SLICER_MAX_RETRIES",
     "request_timeout_seconds": "STORY_SLICER_REQUEST_TIMEOUT_SECONDS",
     "session_timeout_seconds": "STORY_SLICER_SESSION_TIMEOUT_SECONDS",
@@ -35,6 +37,8 @@ _NULLABLE_FIELDS = {
     "nvidia_base_url",
     "openai_api_key",
     "openai_base_url",
+    "github_api_token",
+    "github_repository",
 }
 _PROVIDER_SETTINGS = {
     "gemini": ("gemini_api_key", "gemini_base_url"),
