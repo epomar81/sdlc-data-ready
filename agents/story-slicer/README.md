@@ -170,7 +170,7 @@ function signatures.
 | --- | --- | --- |
 | Domain | `story_slicer.domain.models` | Requirement, story, scenario, metadata, and final-batch validation. |
 | Ports and contracts | `story_slicer.ports` | Provider-neutral protocols, requests/results, runtime settings, telemetry events, and shared errors. |
-| Adapters | `story_slicer.adapters` | Environment configuration, bounded YAML reads, safe YAML parsing, GitHub issue input and story publishing, Gemini/NVIDIA HTTP APIs, and OpenTelemetry. |
+| Adapters | `story_slicer.adapters` | Environment configuration, bounded YAML reads, YAML and initiative-refiner parsing, GitHub issue input and story publishing, Gemini/NVIDIA/OpenAI HTTP APIs, and OpenTelemetry. |
 | Application | `story_slicer.application` | Prompts, ID assignment, bounded self-healing, deadlines, and session lifecycle. |
 
 Domain dependencies are limited to Pydantic and Python's standard library.
@@ -191,9 +191,10 @@ After changing `.envrc`, reload it with `source .envrc` or `direnv allow`.
 
 ## Product input contract
 
-`RequirementDocument` is the shared product input model. The requirement input
-adapter loads either YAML or a GitHub issue. For YAML, `YamlRequirementParser`
-uses a safe UTF-8 YAML loader and rejects duplicate keys, multiple documents,
+`RequirementDocument` is the shared product input model. `RequirementInputPort`
+loads either YAML or a GitHub issue and normalizes both to this model. The YAML
+loader uses `FileSystemPort` for bounded reads and `RequirementParserPort` for
+parsing. `YamlRequirementParser` uses a safe UTF-8 YAML loader and rejects duplicate keys, multiple documents,
 unsupported tags, and invalid input
 schemas. Parsing errors become `InputError` with YAML line/column locations or
 schema field paths and validation messages, without displaying input values or
@@ -311,8 +312,8 @@ schema = StoryBatch.model_json_schema()
 | `LLMPort` | Async `generate(request)` | Takes `GenerationRequest`, returns raw `GenerationResult` text and `TokenUsage`. |
 | `ConfigurationPort` | Sync `load()` | Returns validated, immutable `RuntimeSettings`. |
 | `FileSystemPort` | Async `read(request)` | Takes `FileReadRequest(path, max_bytes)`, returns raw bytes or raises `InputError`. |
-| `RequirementParserPort` | Sync `parse(content)` | Converts raw bytes to `RequirementDocument` or raises `InputError`. |
-| `RequirementInputPort` | Async `load(source)` | Combined input contract; the engine uses separate filesystem and parser ports. |
+| `RequirementParserPort` | Sync `parse(content)` | Converts YAML bytes to `RequirementDocument` or raises `InputError`; used by the YAML loader adapter. |
+| `RequirementInputPort` | Async `load(source)` | Loads a YAML file or GitHub issue and returns normalized `RequirementDocument`. |
 | `ObservabilityPort` | Sync `start_session(context)` and `record(event)` | Starts timing, records a start event, returns a `SessionHandle`, then accepts typed lifecycle events. |
 
 `GenerationRequest` carries instructions, requirement data, a JSON schema, and

@@ -9,9 +9,8 @@ each generated story.
 
 ## Your Role
 
-- Senior software developer using python language.
-- Senior agent designer and developer using pydantic library.
-- Your follow clean code practices.
+- Act as a senior Python developer and Pydantic-based agent designer.
+- Follow clean-code practices and the engineering constraints below.
 
 ## Engineering Bar
 
@@ -21,8 +20,6 @@ clarity and simplicity over cleverness. The sections below (Coding
 Constraints, Idiomatic Python Rules, Common Mistakes to Avoid) are the
 concrete, checkable expression of this bar — follow them precisely rather
 than treating this statement as a substitute for them.
-
-## Idiomatic Python Rules
 
 ## Coding Constraints
 
@@ -62,3 +59,29 @@ than treating this statement as a substitute for them.
   report partial ticket failures without deleting or replacing that JSON.
 - Do not add duplicate detection for story tickets unless the user requests it;
   each explicit publishing run creates new issues.
+
+## Architecture
+
+- Keep domain models independent of YAML, GitHub, HTTP clients, environment
+  access, filesystem APIs, provider SDKs, and telemetry exporters.
+- Put source-specific loading in adapters behind `RequirementInputPort`.
+  YAML files may use either the product input schema or the initiative-refiner
+  schema; normalize both to `RequirementDocument` before slicing.
+- Keep LLM providers behind `LLMPort`. Select Gemini, NVIDIA, or OpenAI through
+  `create_llm(settings)`; provider details must not enter the application flow.
+- Keep runtime configuration in `RuntimeSettings`, loaded once through
+  `ConfigurationPort`. `.envrc` is a local direnv convenience; the application
+  reads exported environment variables and does not parse that file itself.
+- Keep telemetry behind `ObservabilityPort`. Do not send requirement content,
+  prompts, model responses, credentials, or validation diagnostics to telemetry.
+
+## CLI and output
+
+- YAML is the default input and the positional argument remains a file path.
+  GitHub issue input requires `--source github` and accepts
+  `owner/repo#number` or an issue URL.
+- Every successful run writes the complete validated `StoryBatch` as JSON.
+  The default output is `stories.json`; `--output` or `OUTPUT` selects another
+  path. Save that JSON before starting optional ticket publishing.
+- Ticket publishing is opt-in. Report per-story failures and preserve the
+  generated JSON when some or all GitHub issue creations fail.
