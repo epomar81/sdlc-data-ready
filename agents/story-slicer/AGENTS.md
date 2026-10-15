@@ -41,6 +41,19 @@ than treating this statement as a substitute for them.
 
 ## Product Workflow
 
+- The workflow loads YAML or GitHub input through `RequirementInputPort` and
+  normalizes it to `RequirementDocument`. The application sends that document
+  to the selected `LLMPort` with the slicing instructions and the JSON schema
+  generated from `StoryBatch`.
+- The model returns a story batch as JSON. `application.validation` parses it
+  and validates each story with the Pydantic `Story` model, assigns the final
+  project-prefixed IDs, then validates the complete `StoryBatch`. The domain
+  structure is defined by `Story`, `Scenario`, and `StoryBatch` in
+  `story_slicer.domain.models`; the generation guidance is in
+  `story_slicer.application.prompts`. Invalid output follows the application's
+  bounded repair flow and is validated again.
+- A successful run saves the complete validated `StoryBatch` as JSON. Optional
+  GitHub ticket publishing happens afterward.
 - Keep YAML as the default input source and preserve the existing positional
   file-path invocation. GitHub issues are selected explicitly with
   `--source github` and may be referenced as `owner/repo#number` or an issue URL.
