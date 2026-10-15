@@ -5,11 +5,21 @@ from typing import Annotated, NoReturn
 
 from pydantic import Field, JsonValue
 
-from story_slicer.domain.models import DomainModel, Story, StoryBatch
+from story_slicer.domain.models import (
+    Complexity,
+    DomainModel,
+    Story,
+    StoryAlert,
+    StoryBatch,
+)
 
 
 class _StoryEnvelope(DomainModel):
     stories: Annotated[list[dict[str, JsonValue]], Field(min_length=1)]
+    story_count: int
+    ambiguity_score: float
+    estimated_complexity: Complexity
+    alerts: list[StoryAlert]
 
 
 def _unique_object(pairs: list[tuple[str, JsonValue]]) -> dict[str, JsonValue]:
@@ -36,4 +46,10 @@ def validate_stories(text: str, project: str) -> StoryBatch:
         stories.append(
             Story.model_validate(story.model_dump() | {"ID": f"{project}-{number}"})
         )
-    return StoryBatch(stories=stories)
+    return StoryBatch(
+        stories=stories,
+        story_count=envelope.story_count,
+        ambiguity_score=envelope.ambiguity_score,
+        estimated_complexity=envelope.estimated_complexity,
+        alerts=envelope.alerts,
+    )

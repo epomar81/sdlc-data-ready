@@ -13,7 +13,7 @@ from story_slicer.domain.models import StoryBatch
 from story_slicer.ports.configuration import RuntimeSettings
 from story_slicer.ports.errors import InputError
 from story_slicer.ports.requirements import RequirementSource, StoryPublishRequest
-from tests.fixtures import settings_data, story_data
+from tests.fixtures import settings_data, story_batch_data, story_data
 
 
 def github_settings() -> RuntimeSettings:
@@ -119,30 +119,44 @@ def test_github_loader_sanitizes_http_errors() -> None:
 
 def test_story_publisher_formats_story_and_reports_created_url() -> None:
     async def run() -> None:
+        clarification_comment = (
+            "MISSING_INFO: Confirm status refresh interval. Show last updated time."
+        )
         batch = StoryBatch.model_validate(
-            {
+            story_batch_data()
+            | {
                 "stories": [
                     story_data()
                     | {
-                        "clarification": "Confirm status refresh interval",
-                        "suggestions": ["Show last updated time"],
+                        "clarification_comment": clarification_comment,
+                        "tags": ["MISSING_INFO"],
+                        "labels": ["needs-clarification"],
                     }
                 ]
             }
         )
 
-        def respond(request: httpx.Request) -> httpx.Response:
+        async def respond(request: httpx.Request) -> httpx.Response:
             payload = json.loads(request.content)
-            assert request.url.path == "/repos/octo/shop/issues"
-            assert payload["title"] == "[SHOP-1] Track an order"
-            assert "Acceptance criteria" in payload["body"]
-            assert "Confirm status refresh interval" in payload["body"]
-            assert "Show last updated time" in payload["body"]
-            assert "https://github.com/octo/shop/issues/12" in payload["body"]
-            return httpx.Response(
-                201,
-                json={"html_url": "https://github.com/octo/shop/issues/99"},
-            )
+            if request.url.path == "/repos/octo/shop/issues":
+                assert payload["title"] == "[SHOP-1] Track an order"
+                assert "Acceptance criteria" in payload["body"]
+                assert "Confirm status refresh interval" not in payload["body"]
+                assert "MISSING_INFO" not in payload["body"]
+                assert "https://github.com/octo/shop/issues/12" in payload["body"]
+                return httpx.Response(
+                    201,
+                    json={
+                        "number": 99,
+                        "html_url": "https://github.com/octo/shop/issues/99",
+                    },
+                )
+            if request.url.path == "/repos/octo/shop/issues/99/labels":
+                assert payload == {"labels": ["needs-clarification", "priority:high"]}
+                return httpx.Response(200, json=[])
+            assert request.url.path == "/repos/octo/shop/issues/99/comments"
+            assert payload == {"body": clarification_comment}
+            return httpx.Response(201, json={"id": 1})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             result = await GitHubStoryPublisher(github_settings(), client).publish(
@@ -160,26 +174,81 @@ def test_story_publisher_formats_story_and_reports_created_url() -> None:
 
 def test_story_publisher_continues_after_partial_failure() -> None:
     async def run() -> None:
+        batch_data = story_batch_data()
         batch = StoryBatch.model_validate(
-            {"stories": [story_data(), story_data() | {"ID": "SHOP-2"}]}
+            batch_data
+            | {
+                "stories": [story_data(), story_data() | {"ID": "SHOP-2"}],
+                "story_count": 2,
+            }
         )
         attempts = 0
 
         def respond(request: httpx.Request) -> httpx.Response:
             nonlocal attempts
             attempts += 1
-            if attempts == 1:
+            if request.url.path.endswith("/issues"):
+                if request.content and b"SHOP-1" in request.content:
+                    return httpx.Response(
+                        201,
+                        json={
+                            "number": 100,
+                            "html_url": "https://github.com/octo/shop/issues/100",
+                        },
+                    )
+                return httpx.Response(
+                    201,
+                    json={
+                        "number": 101,
+                        "html_url": "https://github.com/octo/shop/issues/101",
+                    },
+                )
+            if request.url.path.endswith("/100/labels"):
                 return httpx.Response(422, text="github-secret")
-            return httpx.Response(
-                201,
-                json={"html_url": "https://github.com/octo/shop/issues/100"},
-            )
+            if request.url.path.endswith("/comments"):
+                return httpx.Response(201, json={"id": 2})
+            return httpx.Response(200, json=[])
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             result = await GitHubStoryPublisher(github_settings(), client).publish(
                 StoryPublishRequest(batch=batch, repository="octo/shop")
             )
-        assert result.created == ["https://github.com/octo/shop/issues/100"]
-        assert result.failures == ["SHOP-1: GitHub returned HTTP 422"]
+        assert result.created == [
+            "https://github.com/octo/shop/issues/100",
+            "https://github.com/octo/shop/issues/101",
+        ]
+        assert result.failures == ["SHOP-1: GitHub labels returned HTTP 422"]
+
+    asyncio.run(run())
+
+
+def test_story_publisher_preserves_issue_when_comment_creation_fails() -> None:
+    async def run() -> None:
+        story = story_data() | {
+            "tags": ["MISSING_INFO"],
+            "labels": ["needs-clarification"],
+            "clarification_comment": "MISSING_INFO: Confirm delivery window.",
+        }
+        batch = StoryBatch.model_validate(story_batch_data() | {"stories": [story]})
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/issues"):
+                return httpx.Response(
+                    201,
+                    json={
+                        "number": 42,
+                        "html_url": "https://github.com/octo/shop/issues/42",
+                    },
+                )
+            if request.url.path.endswith("/labels"):
+                return httpx.Response(200, json=[])
+            return httpx.Response(503, text="github-secret")
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            result = await GitHubStoryPublisher(github_settings(), client).publish(
+                StoryPublishRequest(batch=batch, repository="octo/shop")
+            )
+        assert result.created == ["https://github.com/octo/shop/issues/42"]
+        assert result.failures == ["SHOP-1: GitHub comment returned HTTP 503"]
 
     asyncio.run(run())

@@ -11,8 +11,9 @@ ProjectIdentifier = Annotated[
 StoryIdentifier = Annotated[
     str, StringConstraints(pattern=r"^[A-Za-z][A-Za-z0-9_-]*-[1-9][0-9]*$")
 ]
-MetadataText = Annotated[str, StringConstraints(pattern=r"^$|\S")] | list[NonBlank]
-Priority = Literal["HIGH", "MEDIUM", "LOW"]
+Priority = Literal["priority:high", "priority:medium", "priority:low"]
+Complexity = Literal["low", "medium", "high"]
+AlertSeverity = Literal["INFO", "WARNING", "CRITICAL"]
 
 
 class DomainModel(BaseModel):
@@ -28,23 +29,12 @@ class Scenario(DomainModel):
     Then: NonBlank
 
 
-class IntelligenceMetadata(DomainModel):
-    tags: list[NonBlank]
-    clarification: MetadataText
-    suggestions: MetadataText
-
-    @model_validator(mode="after")
-    def validate_missing_information(self) -> Self:
-        if "MISSING_INFO" in self.tags and (
-            not self.clarification or not self.suggestions
-        ):
-            raise ValueError(
-                "MISSING_INFO requires nonempty clarification and suggestions"
-            )
-        return self
+class StoryAlert(DomainModel):
+    severity: AlertSeverity
+    rationale: NonBlank
 
 
-class Story(IntelligenceMetadata):
+class Story(DomainModel):
     ID: StoryIdentifier
     title: NonBlank
     Who: NonBlank
@@ -52,18 +42,40 @@ class Story(IntelligenceMetadata):
     Benefit_Why: NonBlank
     Priority: Priority
     acceptance_criteria: Annotated[list[Scenario], Field(min_length=1)]
+    tags: list[NonBlank]
+    labels: list[NonBlank]
+    clarification_comment: Annotated[str, StringConstraints(pattern=r"^$|\S")]
+
+    @model_validator(mode="after")
+    def validate_missing_information(self) -> Self:
+        if "MISSING_INFO" in self.tags and not self.clarification_comment.startswith(
+            "MISSING_INFO"
+        ):
+            raise ValueError(
+                "MISSING_INFO tag requires clarification_comment to start "
+                "with the literal"
+            )
+        if "MISSING_INFO" in self.labels:
+            raise ValueError("MISSING_INFO must not be a GitHub label")
+        return self
 
 
 class StoryBatch(DomainModel):
     """Final stories with authoritative, unique application-assigned IDs."""
 
     stories: Annotated[list[Story], Field(min_length=1)]
+    story_count: Annotated[int, Field(ge=1)]
+    ambiguity_score: Annotated[float, Field(ge=0.0, le=1.0)]
+    estimated_complexity: Complexity
+    alerts: list[StoryAlert]
 
     @model_validator(mode="after")
     def validate_unique_ids(self) -> Self:
         identifiers = [story.ID for story in self.stories]
         if len(identifiers) != len(set(identifiers)):
             raise ValueError("Story IDs must be unique within the final batch")
+        if self.story_count != len(self.stories):
+            raise ValueError("story_count must match the number of stories")
         return self
 
 

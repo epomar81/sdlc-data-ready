@@ -12,7 +12,7 @@ from story_slicer.domain.models import StoryBatch
 from story_slicer.ports.configuration import RuntimeSettings
 from story_slicer.ports.errors import InputError
 from story_slicer.ports.requirements import RequirementSource, StoryPublishResult
-from tests.fixtures import settings_data, story_data
+from tests.fixtures import settings_data, story_batch_data
 
 
 def load_cli() -> dict[str, object]:
@@ -51,7 +51,7 @@ def configured_namespace(batch: StoryBatch) -> tuple[dict[str, object], AsyncMoc
 
 @pytest.mark.parametrize("failure", [False, True])
 def test_cli_output_and_cleanup(failure: bool, tmp_path: Path) -> None:
-    batch = StoryBatch.model_validate({"stories": [story_data()]})
+    batch = StoryBatch.model_validate(story_batch_data())
     namespace, execute = configured_namespace(batch)
     patches = namespace["_test_patches"]
     output_path = tmp_path / "stories.json"
@@ -84,7 +84,7 @@ def test_cli_defaults_output_to_stories_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    batch = StoryBatch.model_validate({"stories": [story_data()]})
+    batch = StoryBatch.model_validate(story_batch_data())
     namespace, _ = configured_namespace(batch)
     with (
         patch.dict(namespace, namespace["_test_patches"]),
@@ -98,7 +98,7 @@ def test_cli_keeps_json_when_ticket_creation_is_partial(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    batch = StoryBatch.model_validate({"stories": [story_data()]})
+    batch = StoryBatch.model_validate(story_batch_data())
     namespace, _ = configured_namespace(batch)
     publisher = Mock(
         publish=AsyncMock(
@@ -137,7 +137,7 @@ def test_yaml_ticket_creation_uses_configured_repository(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    batch = StoryBatch.model_validate({"stories": [story_data()]})
+    batch = StoryBatch.model_validate(story_batch_data())
     namespace, _ = configured_namespace(batch)
     settings = RuntimeSettings.model_validate(
         settings_data() | {"github_repository": "acme/shop"}
@@ -161,7 +161,7 @@ def test_yaml_ticket_creation_uses_configured_repository(
 
 
 def test_cli_selects_github_loader_and_source_reference(tmp_path: Path) -> None:
-    batch = StoryBatch.model_validate({"stories": [story_data()]})
+    batch = StoryBatch.model_validate(story_batch_data())
     namespace, execute = configured_namespace(batch)
     patches = cast(dict[str, object], namespace["_test_patches"]) | {
         "GitHubRequirementLoader": Mock()

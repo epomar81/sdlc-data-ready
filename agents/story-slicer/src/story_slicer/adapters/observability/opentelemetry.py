@@ -45,6 +45,9 @@ class OpenTelemetryObservability:
         self._session_duration = meter.create_histogram(
             "story_slicer.session.duration", unit="s"
         )
+        self._ambiguity_score = meter.create_histogram(
+            "story_slicer.ambiguity_score", unit="1"
+        )
         self._attempt_duration = meter.create_histogram(
             "story_slicer.attempt.duration", unit="s"
         )
@@ -165,6 +168,10 @@ class OpenTelemetryObservability:
                 event.elapsed_seconds, labels | {"outcome": event.outcome}
             )
             self._sessions_count.add(1, labels | {"outcome": event.outcome})
+            if event.outcome == "success" and event.ambiguity_score is not None:
+                self._ambiguity_score.record(
+                    event.ambiguity_score, labels | {"outcome": event.outcome}
+                )
             span.set_attribute("usage_complete", event.usage_complete)
             span.set_attribute("outcome", event.outcome)
             span.set_status(

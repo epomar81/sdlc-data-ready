@@ -109,9 +109,11 @@ class SliceRequirement:
             )
         )
         session = _Session(handle=handle)
+        ambiguity_score: float | None = None
         try:
             async with asyncio.timeout(self._settings.session_timeout_seconds):
                 result = await self._slice(content, session)
+                ambiguity_score = result.ambiguity_score
             session.outcome = "success"
             return result
         except InputError:
@@ -144,6 +146,7 @@ class SliceRequirement:
                     usage_complete=session.usage.complete
                     and usage.input_tokens is not None
                     and usage.output_tokens is not None,
+                    ambiguity_score=ambiguity_score,
                 )
             )
 

@@ -8,7 +8,7 @@ def story_data() -> dict[str, Any]:
         "Who": "Customer",
         "Action_What": "View order status",
         "Benefit_Why": "Know when to expect delivery",
-        "Priority": "HIGH",
+        "Priority": "priority:high",
         "acceptance_criteria": [
             {
                 "Scenario": "View a shipped order",
@@ -18,8 +18,18 @@ def story_data() -> dict[str, Any]:
             }
         ],
         "tags": [],
-        "clarification": "",
-        "suggestions": [],
+        "labels": ["enhancement"],
+        "clarification_comment": "",
+    }
+
+
+def story_batch_data() -> dict[str, Any]:
+    return {
+        "stories": [story_data()],
+        "story_count": 1,
+        "ambiguity_score": 0.25,
+        "estimated_complexity": "low",
+        "alerts": [],
     }
 
 

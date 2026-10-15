@@ -7,7 +7,7 @@ from story_slicer.domain.models import (
     Story,
     StoryBatch,
 )
-from tests.fixtures import story_data
+from tests.fixtures import story_batch_data, story_data
 
 
 def test_valid_story_round_trip_and_schema() -> None:
@@ -30,6 +30,7 @@ def test_strict_story_and_scenario_validation() -> None:
         {"extra": True},
         {"acceptance_criteria": []},
         {"Priority": "URGENT"},
+        {"Priority": "HIGH"},
     ]
     for change in changes:
         with pytest.raises(ValidationError):
@@ -40,33 +41,62 @@ def test_strict_story_and_scenario_validation() -> None:
         Story.model_validate(data)
 
 
-def test_missing_info_accepts_meaningful_string_and_list_metadata() -> None:
+def test_missing_info_requires_plain_text_in_comment_and_not_as_label() -> None:
     story = Story.model_validate(
         story_data()
         | {
             "tags": ["MISSING_INFO"],
-            "clarification": "Which carrier?",
-            "suggestions": ["Keep the carrier unspecified until clarified."],
+            "clarification_comment": "MISSING_INFO: Which carrier? Keep unspecified.",
+            "labels": ["needs-clarification"],
         }
     )
     assert story.tags == ["MISSING_INFO"]
+    assert "MISSING_INFO" in story.clarification_comment
 
 
-def test_missing_info_requires_both_metadata_fields() -> None:
-    for metadata in [
-        {"clarification": "Question", "suggestions": []},
-        {"clarification": "", "suggestions": ["Assumption"]},
-        {"clarification": " ", "suggestions": ["Assumption"]},
-    ]:
+def test_missing_info_comment_and_label_are_validated() -> None:
+    changes: list[dict[str, object]] = [
+        {"clarification_comment": "Which carrier?"},
+        {"clarification_comment": "", "labels": ["MISSING_INFO"]},
+    ]
+    for change in changes:
+        invalid_story = story_data()
+        invalid_story.update(
+            {
+                "tags": ["MISSING_INFO"],
+                "clarification_comment": "MISSING_INFO: Which carrier?",
+            }
+        )
+        invalid_story.update(change)
         with pytest.raises(ValidationError):
-            Story.model_validate(story_data() | {"tags": ["MISSING_INFO"]} | metadata)
+            Story.model_validate(invalid_story)
 
 
 def test_final_batch_requires_unique_ids() -> None:
     story = Story.model_validate(story_data())
-    assert StoryBatch(stories=[story]).stories == [story]
+    batch_data = story_batch_data()
+    assert StoryBatch.model_validate(batch_data).stories == [story]
     with pytest.raises(ValidationError):
-        StoryBatch(stories=[story, story])
+        StoryBatch.model_validate(
+            batch_data | {"stories": [story_data(), story_data()]}
+        )
+
+
+def test_batch_metrics_and_alerts_are_strict_and_consistent() -> None:
+    batch = StoryBatch.model_validate(story_batch_data())
+    assert batch.story_count == len(batch.stories) == 1
+    changes: list[dict[str, object]] = [
+        {"ambiguity_score": -0.1},
+        {"ambiguity_score": 1.1},
+        {"estimated_complexity": "urgent"},
+        {"story_count": 2},
+        {"alerts": [{"severity": "NOTICE", "rationale": "Risk"}]},
+    ]
+    for change in changes:
+        with pytest.raises(ValidationError):
+            invalid_batch = story_batch_data()
+            invalid_batch.update(change)
+            StoryBatch.model_validate(invalid_batch)
 
 
 def test_requirement_document_defaults_and_boundaries() -> None:

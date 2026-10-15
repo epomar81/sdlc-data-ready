@@ -139,24 +139,11 @@ def _story_body(story: Story, source_url: str | None) -> str:
         for scenario in story.acceptance_criteria
     )
     source = f"\n\nSource requirement: {source_url}" if source_url else ""
-    clarification = (
-        ", ".join(story.clarification)
-        if isinstance(story.clarification, list)
-        else story.clarification or "None"
-    )
-    suggestions = (
-        ", ".join(story.suggestions)
-        if isinstance(story.suggestions, list)
-        else story.suggestions or "None"
-    )
     return (
-        f"**As** {story.Who}, I want {story.Action_What}, "
+        f"## User story\n\n"
+        f"As {story.Who}, I want {story.Action_What}, "
         f"so that {story.Benefit_Why}.\n\n"
-        f"**Priority:** {story.Priority}\n\n"
-        f"**Tags:** {', '.join(story.tags) if story.tags else 'None'}\n\n"
-        f"**Clarification:** {clarification}\n\n"
-        f"**Suggestions:** {suggestions}\n\n"
-        f"**Acceptance criteria**\n\n{scenarios}{source}"
+        f"## Acceptance criteria\n\n{scenarios}{source}"
     )
 
 
@@ -190,11 +177,58 @@ class GitHubStoryPublisher:
                 response.raise_for_status()
                 issue = response.json()
                 url = issue.get("html_url") if isinstance(issue, dict) else None
-                if not isinstance(url, str) or not url.startswith(
-                    "https://github.com/"
+                number = issue.get("number") if isinstance(issue, dict) else None
+                if (
+                    not isinstance(url, str)
+                    or not url.startswith("https://github.com/")
+                    or not isinstance(number, int)
                 ):
                     raise ValueError
                 created.append(url)
+                labels = list(dict.fromkeys([*story.labels, story.Priority]))
+                try:
+                    label_response = await self._client.post(
+                        f"{_API_URL}/repos/{request.repository}/issues/{number}/labels",
+                        headers={
+                            "Accept": "application/vnd.github+json",
+                            "Authorization": f"Bearer {token}",
+                            "X-GitHub-Api-Version": "2022-11-28",
+                        },
+                        json={"labels": labels},
+                        timeout=self._settings.request_timeout_seconds,
+                    )
+                    label_response.raise_for_status()
+                except httpx.TimeoutException:
+                    failures.append(f"{story.ID}: GitHub labels request timed out")
+                except httpx.HTTPStatusError as error:
+                    failures.append(
+                        f"{story.ID}: GitHub labels returned HTTP "
+                        f"{error.response.status_code}"
+                    )
+                except httpx.HTTPError:
+                    failures.append(f"{story.ID}: GitHub labels request failed")
+                if story.clarification_comment:
+                    try:
+                        comment_response = await self._client.post(
+                            f"{_API_URL}/repos/{request.repository}/issues/{number}/comments",
+                            headers={
+                                "Accept": "application/vnd.github+json",
+                                "Authorization": f"Bearer {token}",
+                                "X-GitHub-Api-Version": "2022-11-28",
+                            },
+                            json={"body": story.clarification_comment},
+                            timeout=self._settings.request_timeout_seconds,
+                        )
+                        comment_response.raise_for_status()
+                    except httpx.TimeoutException:
+                        failures.append(f"{story.ID}: GitHub comment request timed out")
+                    except httpx.HTTPStatusError as error:
+                        failures.append(
+                            f"{story.ID}: GitHub comment returned HTTP "
+                            f"{error.response.status_code}"
+                        )
+                    except httpx.HTTPError:
+                        failures.append(f"{story.ID}: GitHub comment request failed")
             except httpx.TimeoutException:
                 failures.append(f"{story.ID}: GitHub request timed out")
             except httpx.HTTPStatusError as error:

@@ -75,6 +75,7 @@ class SessionCompleted(SessionEvent):
     elapsed_seconds: ElapsedSeconds
     usage: TokenUsage
     usage_complete: bool
+    ambiguity_score: Annotated[float, Field(ge=0.0, le=1.0)] | None = None
 
     @model_validator(mode="after")
     def validate_complete_usage(self) -> Self:

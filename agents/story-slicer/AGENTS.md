@@ -51,7 +51,22 @@ than treating this statement as a substitute for them.
   structure is defined by `Story`, `Scenario`, and `StoryBatch` in
   `story_slicer.domain.models`; the generation guidance is in
   `story_slicer.application.prompts`. Invalid output follows the application's
-  bounded repair flow and is validated again.
+  bounded repair flow and is validated again. Preserve INVEST evaluation,
+  treat requirement and repair text as raw data, and require only one JSON object
+  with no surrounding prose or Markdown fences.
+- Each story has a title, role, action, benefit, BDD scenarios, `labels`, a
+  `clarification_comment`, tags, and a priority formatted as `priority:high`,
+  `priority:medium`, or `priority:low`. The GitHub issue body uses GFM and
+  contains the story and scenarios. Clarification questions, assumptions, and
+  ambiguity details belong only in the separate `clarification_comment`.
+- When a story has the `MISSING_INFO` tag, the comment must start with the exact
+  plain text `MISSING_INFO`. Never apply that literal as a GitHub label; use a
+  standard label such as `needs-clarification` when appropriate.
+- `StoryBatch` includes a `story_count` matching its stories, an
+  `ambiguity_score` float from `0.0` to `1.0`, an `estimated_complexity` of
+  `low`, `medium`, or `high`, and alerts with `INFO`, `WARNING`, or `CRITICAL`
+  severity and a concise rationale. Repairs that change stories must recalculate
+  the batch metrics and alerts while preserving the body/comment separation.
 - A successful run saves the complete validated `StoryBatch` as JSON. Optional
   GitHub ticket publishing happens afterward.
 - Keep YAML as the default input source and preserve the existing positional
@@ -70,6 +85,11 @@ than treating this statement as a substitute for them.
   `STORY_SLICER_GITHUB_REPOSITORY` by default, with `--target-repo` as a
   per-run override. Save the full `StoryBatch` JSON before publishing, and
   report partial ticket failures without deleting or replacing that JSON.
+- Publish each story's labels and priority as GitHub labels. Publish a nonempty
+  `clarification_comment` as a separate GitHub issue comment, never in the issue
+  body. If label or comment publication fails after issue creation, retain the
+  created issue result, report the failed follow-up action, and continue with
+  remaining stories.
 - Do not add duplicate detection for story tickets unless the user requests it;
   each explicit publishing run creates new issues.
 
@@ -87,6 +107,9 @@ than treating this statement as a substitute for them.
   reads exported environment variables and does not parse that file itself.
 - Keep telemetry behind `ObservabilityPort`. Do not send requirement content,
   prompts, model responses, credentials, or validation diagnostics to telemetry.
+- Record the `ambiguity_score` of successfully validated batches in OpenTelemetry
+  as a numeric histogram. Use only bounded context such as provider and outcome
+  as metric attributes; never use the score itself as an attribute.
 
 ## CLI and output
 

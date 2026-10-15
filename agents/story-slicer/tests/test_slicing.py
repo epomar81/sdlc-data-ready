@@ -23,7 +23,7 @@ from story_slicer.ports.observability import (
     SessionHandle,
 )
 from story_slicer.ports.requirements import RequirementInputPort, RequirementSource
-from tests.fixtures import settings_data, story_data
+from tests.fixtures import settings_data, story_batch_data, story_data
 
 
 def dependencies() -> SlicingDependencies:
@@ -49,7 +49,10 @@ def test_valid_first_attempt() -> None:
     assert isinstance(llm, AsyncMock)
     # Provisional duplicate IDs must not prevent authoritative application numbering.
     llm.generate.return_value = GenerationResult(
-        text=json.dumps({"stories": [story_data(), story_data()]}),
+        text=json.dumps(
+            story_batch_data()
+            | {"stories": [story_data(), story_data()], "story_count": 2}
+        ),
         usage=TokenUsage(input_tokens=10, output_tokens=20),
     )
 
@@ -73,6 +76,7 @@ def test_valid_first_attempt() -> None:
     completion = events[-1]
     assert isinstance(completion, SessionCompleted)
     assert completion.outcome == "success" and completion.elapsed_seconds >= 0
+    assert completion.ambiguity_score == 0.25
     assert completion.usage == TokenUsage(input_tokens=10, output_tokens=20)
     assert completion.usage_complete
     assert not any(
@@ -85,7 +89,7 @@ def test_successful_self_healing() -> None:
     invalid = story_data() | {"tags": ["MISSING_INFO"]}
     with pytest.raises(ValidationError) as caught:
         Story.model_validate(invalid)
-    broken = json.dumps({"stories": [invalid]})
+    broken = json.dumps(story_batch_data() | {"stories": [invalid]})
     llm = ports.llm
     assert isinstance(llm, AsyncMock)
     llm.generate.side_effect = [
@@ -93,7 +97,7 @@ def test_successful_self_healing() -> None:
             text=broken, usage=TokenUsage(input_tokens=10, output_tokens=20)
         ),
         GenerationResult(
-            text=json.dumps({"stories": [story_data()]}),
+            text=json.dumps(story_batch_data()),
             usage=TokenUsage(input_tokens=5),
         ),
     ]

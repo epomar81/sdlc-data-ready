@@ -117,10 +117,9 @@ must provide these fields:
 | Story information | How it is used in the issue |
 | --- | --- |
 | `ID` and `title` | Issue title: `[ID] title` (for example, `[SHOP-1] Track an order`) |
-| `Who`, `Action_What`, `Benefit_Why` | Issue description in the “As a …, I want …, so that …” format |
-| `Priority` | Printed in the issue description |
-| `tags` | Printed in the issue description; they are not applied as GitHub labels |
-| `clarification` and `suggestions` | Printed in the issue description |
+| `Who`, `Action_What`, `Benefit_Why` | GFM issue description in the “As a …, I want …, so that …” format |
+| `Priority` and `labels` | Applied to the issue as GitHub labels |
+| `clarification_comment` | Posted as a separate issue comment when nonempty |
 | `acceptance_criteria` | Printed as Given/When/Then scenarios in the issue description |
 
 When the input is a GitHub issue, its URL is also included as the source
@@ -257,7 +256,7 @@ and `Then`.
       "Who": "Customer",
       "Action_What": "View the shipping status of my order",
       "Benefit_Why": "Know when to expect delivery",
-      "Priority": "HIGH",
+      "Priority": "priority:high",
       "acceptance_criteria": [
         {
           "Scenario": "View a shipped order",
@@ -267,17 +266,23 @@ and `Then`.
         }
       ],
       "tags": [],
-      "clarification": "",
-      "suggestions": []
+      "labels": ["enhancement"],
+      "clarification_comment": ""
     }
-  ]
+  ],
+  "story_count": 1,
+  "ambiguity_score": 0.2,
+  "estimated_complexity": "low",
+  "alerts": []
 }
 ```
 
 All story fields are required. Validation is strict, forbids extra fields, and
-rejects blank story/scenario text. `Priority` is `HIGH`, `MEDIUM`, or `LOW`.
+rejects blank story/scenario text. `Priority` is one of `priority:high`,
+`priority:medium`, or `priority:low`. Labels are applied to GitHub issues, with
+the priority value included. `MISSING_INFO` must not be a GitHub label.
 Each story has at least one acceptance scenario; each batch has at least one
-story with unique IDs.
+story with unique IDs. `story_count` must equal the number of stories.
 
 `ID` is `<project>-<positive integer>` with no leading zeros in the number.
 The engine validates individual LLM stories, replaces their IDs with sequential
@@ -285,13 +290,15 @@ project-prefixed IDs in output order, then validates the final batch. Duplicate
 provisional LLM IDs alone do not trigger repair. Numbering restarts per invocation;
 persistent numbering is outside the first release.
 
-`tags` is a list of nonblank strings. `clarification` and `suggestions` each
-accept a string or a list of nonblank strings. Empty strings/lists are allowed
-only without the exact reserved tag `MISSING_INFO`; whitespace-only values are
-always invalid. With that tag, both fields must contain meaningful text.
-Clarifications ask about unresolved critical information; suggestions describe
-assumptions or why no safe assumption can be made. Such stories are valid drafts
-requiring Product Owner review, not implementation-ready stories.
+`tags` and `labels` are lists of nonblank strings. `clarification_comment` is
+empty when no clarification is needed. When `MISSING_INFO` is in `tags`, the
+comment must start with that exact plain text and contain the clarification
+questions and assumptions. The comment is published separately from the issue
+body. `ambiguity_score` is a float from 0.0 to 1.0 and is recorded as an
+OpenTelemetry histogram for successful batches. `estimated_complexity` is
+`low`, `medium`, or `high`. Each alert has a severity (`INFO`, `WARNING`, or
+`CRITICAL`) and a rationale. Such stories are valid drafts requiring Product
+Owner review, not implementation-ready stories.
 
 Pydantic validates structure and metadata consistency. INVEST, independence,
 atomicity, and recognition of missing business information are semantic goals

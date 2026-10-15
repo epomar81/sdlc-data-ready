@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import InMemoryMetricReader, Sum
+from opentelemetry.sdk.metrics.export import Histogram, InMemoryMetricReader, Sum
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import (
     SimpleSpanProcessor,
@@ -47,10 +47,11 @@ def test_telemetry_records_metrics_spans_and_alerts() -> None:
     telemetry.record(
         SessionCompleted(
             session=session,
-            outcome="aborted",
+            outcome="success",
             elapsed_seconds=0.2,
             usage=TokenUsage(input_tokens=4, output_tokens=8),
             usage_complete=False,
+            ambiguity_score=0.35,
         )
     )
     spans = exporter.get_finished_spans()
@@ -82,6 +83,14 @@ def test_telemetry_records_metrics_spans_and_alerts() -> None:
         for point in tokens.data_points
         if point.attributes is not None
     } == {"input": 4, "output": 8}
+    ambiguity = instruments["story_slicer.ambiguity_score"].data
+    assert isinstance(ambiguity, Histogram)
+    assert ambiguity.data_points[0].count == 1
+    assert ambiguity.data_points[0].sum == 0.35
+    assert ambiguity.data_points[0].attributes == {
+        "provider": "gemini",
+        "outcome": "success",
+    }
     for metric in instruments.values():
         for point in metric.data.data_points:
             assert point.attributes is not None
@@ -111,6 +120,7 @@ def test_telemetry_export_failure_does_not_escape() -> None:
             elapsed_seconds=1.0,
             usage=TokenUsage(),
             usage_complete=False,
+            ambiguity_score=0.2,
         )
     )
     telemetry.close()
