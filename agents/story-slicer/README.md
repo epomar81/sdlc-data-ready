@@ -122,9 +122,10 @@ must provide these fields:
 | `clarification_comment` | Posted as a separate issue comment when nonempty |
 | `acceptance_criteria` | Printed as Given/When/Then scenarios in the issue description |
 
-When the input is a GitHub issue, its URL is also included as the source
-requirement. The destination repository and an authorized GitHub token are
-required to publish: GitHub input defaults to its source repository; YAML input
+When the input is a GitHub issue, each published story is connected to it using
+GitHub's built-in `relates to` relationship. The source URL is not added to the
+generated issue body. The destination repository and an authorized GitHub token
+are required to publish: GitHub input defaults to its source repository; YAML input
 requires `STORY_SLICER_GITHUB_REPOSITORY` or `--target-repo`. Set
 `STORY_SLICER_GITHUB_TOKEN` with permission to create issues in that repository.
 No other per-story information needs to be supplied manually; the required

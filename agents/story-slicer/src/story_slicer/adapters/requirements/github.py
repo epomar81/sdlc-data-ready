@@ -16,6 +16,7 @@ from story_slicer.ports.requirements import (
 )
 
 _API_URL = "https://api.github.com"
+_RELATIONSHIP_API_VERSION = "2026-03-10"
 _OWNER_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$")
 _REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 
@@ -130,7 +131,7 @@ class GitHubRequirementLoader:
         )
 
 
-def _story_body(story: Story, source_url: str | None) -> str:
+def _story_body(story: Story) -> str:
     scenarios = "\n\n".join(
         f"### {scenario.Scenario}\n"
         f"**Given** {scenario.Given}\n\n"
@@ -138,12 +139,11 @@ def _story_body(story: Story, source_url: str | None) -> str:
         f"**Then** {scenario.Then}"
         for scenario in story.acceptance_criteria
     )
-    source = f"\n\nSource requirement: {source_url}" if source_url else ""
     return (
         f"## User story\n\n"
         f"As {story.Who}, I want {story.Action_What}, "
         f"so that {story.Benefit_Why}.\n\n"
-        f"## Acceptance criteria\n\n{scenarios}{source}"
+        f"## Acceptance criteria\n\n{scenarios}"
     )
 
 
@@ -152,6 +152,40 @@ class GitHubStoryPublisher:
         self._settings = settings
         self._client = client
 
+    async def _source_issue_id(
+        self, request: StoryPublishRequest, token: str
+    ) -> tuple[int | None, str | None]:
+        if request.source_url is None:
+            return None, None
+        try:
+            owner, repository, number = parse_issue_reference(request.source_url)
+            response = await self._client.get(
+                f"{_API_URL}/repos/{owner}/{repository}/issues/{number}",
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "Authorization": f"Bearer {token}",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+                timeout=self._settings.request_timeout_seconds,
+            )
+            response.raise_for_status()
+            issue = response.json()
+            issue_id = issue.get("id") if isinstance(issue, dict) else None
+            if type(issue_id) is not int or issue_id < 1:
+                return None, "GitHub returned an invalid source issue"
+            return issue_id, None
+        except InputError:
+            return None, "GitHub source issue reference is invalid"
+        except httpx.TimeoutException:
+            return None, "GitHub source issue request timed out"
+        except httpx.HTTPStatusError as error:
+            return (
+                None,
+                f"GitHub source issue returned HTTP {error.response.status_code}",
+            )
+        except httpx.HTTPError, ValueError:
+            return None, "GitHub source issue request failed"
+
     async def publish(self, request: StoryPublishRequest) -> StoryPublishResult:
         created: list[str] = []
         failures: list[str] = []
@@ -159,6 +193,9 @@ class GitHubStoryPublisher:
             token = _token(self._settings)
         except InputError as error:
             return StoryPublishResult(created=[], failures=[f"All stories: {error}"])
+        source_issue_id, source_issue_failure = await self._source_issue_id(
+            request, token
+        )
         for story in request.batch.stories:
             try:
                 response = await self._client.post(
@@ -170,7 +207,7 @@ class GitHubStoryPublisher:
                     },
                     json={
                         "title": f"[{story.ID}] {story.title}",
-                        "body": _story_body(story, request.source_url),
+                        "body": _story_body(story),
                     },
                     timeout=self._settings.request_timeout_seconds,
                 )
@@ -185,6 +222,39 @@ class GitHubStoryPublisher:
                 ):
                     raise ValueError
                 created.append(url)
+                if request.source_url is not None:
+                    if source_issue_id is None:
+                        failures.append(
+                            f"{story.ID}: GitHub related issue link failed: "
+                            f"{source_issue_failure}"
+                        )
+                    else:
+                        try:
+                            relation_response = await self._client.post(
+                                f"{_API_URL}/repos/{request.repository}/issues/"
+                                f"{number}/relates_to",
+                                headers={
+                                    "Accept": "application/vnd.github+json",
+                                    "Authorization": f"Bearer {token}",
+                                    "X-GitHub-Api-Version": _RELATIONSHIP_API_VERSION,
+                                },
+                                json={"issue_id": source_issue_id},
+                                timeout=self._settings.request_timeout_seconds,
+                            )
+                            relation_response.raise_for_status()
+                        except httpx.TimeoutException:
+                            failures.append(
+                                f"{story.ID}: GitHub related issue request timed out"
+                            )
+                        except httpx.HTTPStatusError as error:
+                            failures.append(
+                                f"{story.ID}: GitHub related issue returned HTTP "
+                                f"{error.response.status_code}"
+                            )
+                        except httpx.HTTPError:
+                            failures.append(
+                                f"{story.ID}: GitHub related issue request failed"
+                            )
                 labels = list(dict.fromkeys([*story.labels, story.Priority]))
                 try:
                     label_response = await self._client.post(

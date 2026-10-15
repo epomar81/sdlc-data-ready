@@ -137,13 +137,17 @@ def test_story_publisher_formats_story_and_reports_created_url() -> None:
         )
 
         async def respond(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                assert request.url.path == "/repos/octo/shop/issues/12"
+                return httpx.Response(200, json={"id": 1200})
             payload = json.loads(request.content)
             if request.url.path == "/repos/octo/shop/issues":
                 assert payload["title"] == "[SHOP-1] Track an order"
                 assert "Acceptance criteria" in payload["body"]
                 assert "Confirm status refresh interval" not in payload["body"]
                 assert "MISSING_INFO" not in payload["body"]
-                assert "https://github.com/octo/shop/issues/12" in payload["body"]
+                assert "Source requirement" not in payload["body"]
+                assert "https://github.com/octo/shop/issues/12" not in payload["body"]
                 return httpx.Response(
                     201,
                     json={
@@ -154,6 +158,10 @@ def test_story_publisher_formats_story_and_reports_created_url() -> None:
             if request.url.path == "/repos/octo/shop/issues/99/labels":
                 assert payload == {"labels": ["needs-clarification", "priority:high"]}
                 return httpx.Response(200, json=[])
+            if request.url.path == "/repos/octo/shop/issues/99/relates_to":
+                assert payload == {"issue_id": 1200}
+                assert request.headers["x-github-api-version"] == "2026-03-10"
+                return httpx.Response(201, json={})
             assert request.url.path == "/repos/octo/shop/issues/99/comments"
             assert payload == {"body": clarification_comment}
             return httpx.Response(201, json={"id": 1})
@@ -250,5 +258,38 @@ def test_story_publisher_preserves_issue_when_comment_creation_fails() -> None:
             )
         assert result.created == ["https://github.com/octo/shop/issues/42"]
         assert result.failures == ["SHOP-1: GitHub comment returned HTTP 503"]
+
+    asyncio.run(run())
+
+
+def test_story_publisher_reports_related_issue_failure_but_keeps_story() -> None:
+    async def run() -> None:
+        batch = StoryBatch.model_validate(story_batch_data())
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(200, json={"id": 1200})
+            if request.url.path.endswith("/issues"):
+                return httpx.Response(
+                    201,
+                    json={
+                        "number": 43,
+                        "html_url": "https://github.com/octo/shop/issues/43",
+                    },
+                )
+            if request.url.path.endswith("/relates_to"):
+                return httpx.Response(422, text="github-secret")
+            return httpx.Response(200, json=[])
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            result = await GitHubStoryPublisher(github_settings(), client).publish(
+                StoryPublishRequest(
+                    batch=batch,
+                    repository="octo/shop",
+                    source_url="https://github.com/octo/shop/issues/12",
+                )
+            )
+        assert result.created == ["https://github.com/octo/shop/issues/43"]
+        assert result.failures == ["SHOP-1: GitHub related issue returned HTTP 422"]
 
     asyncio.run(run())

@@ -90,6 +90,10 @@ than treating this statement as a substitute for them.
   body. If label or comment publication fails after issue creation, retain the
   created issue result, report the failed follow-up action, and continue with
   remaining stories.
+- For GitHub issue input, connect each generated issue to its source issue using
+  GitHub's built-in `relates to` relationship API. Do not add a textual source
+  requirement line to the generated issue body. Report relationship failures as
+  partial publishing failures while retaining created issues.
 - Do not add duplicate detection for story tickets unless the user requests it;
   each explicit publishing run creates new issues.
 

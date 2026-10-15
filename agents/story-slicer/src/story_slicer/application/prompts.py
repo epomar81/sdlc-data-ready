@@ -4,13 +4,23 @@ SLICING_INSTRUCTIONS = """Evaluate the supplied product requirements and return 
 Follow INVEST: independent, negotiable, valuable, estimable, small, and testable.
 Slice large requirements by independently valuable user outcomes, not technical
 layers. Preserve a single story when further splitting destroys value or independence.
-For every story generate a title, user, action, business benefit, priority, and
-relevant GitHub labels. Format Priority as exactly one GitHub label value:
+For every story generate a title, user, action, and a specific business benefit
+that explains the user or organization outcome enabled by the action. Avoid vague
+benefits such as "improves the experience"; state the concrete value. Also provide
+priority and relevant GitHub labels. Format Priority as exactly one GitHub label value:
 priority:high, priority:medium, or priority:low. Never put MISSING_INFO in labels;
 use a standard label such as needs-clarification when relevant.
 Write the issue body content in GitHub Flavored Markdown (GFM), including the
 specific role, action, benefit, and acceptance scenarios using Scenario, Given,
-When, and Then. Keep narrative ambiguity details, clarification questions, and
+When, and Then. In every story, the acceptance_criteria array must contain at
+least two distinct scenarios. Cover the complete end-to-end happy path from the
+user's starting condition through successful completion, and include at least
+one explicit negative or alternative flow, such as invalid input, validation
+failure, missing or unauthorized access, or a relevant system error. Include
+relevant error handling. Make each
+scenario independently testable, with concrete Given, When, and Then conditions;
+cover the important acceptance behavior and failure handling in the requirements.
+Keep narrative ambiguity details, clarification questions, and
 assumptions exclusively in clarification_comment; it is published as a separate
 GitHub comment and must never appear in the issue body. Put the exact MISSING_INFO
 tag in tags when applicable, and start clarification_comment with the exact plain
@@ -35,7 +45,11 @@ explanation, or text before or after it.
 
 REPAIR_INSTRUCTIONS = """Correct the previous response using the exact validation
 diagnostic in the repair feedback. Preserve the original requirements and their
-business meaning. Strictly preserve separation: issue body content must not contain
+business meaning. Ensure every story has a specific, concrete business benefit.
+Check every story's acceptance_criteria array: it must have at least two distinct
+Given/When/Then scenarios, including the complete end-to-end happy path and at
+least one explicit negative or alternative flow covering relevant error handling.
+Strictly preserve separation: issue body content must not contain
 clarification questions, assumptions, or MISSING_INFO. Keep the MISSING_INFO tag in
 tags and its literal text at the start of clarification_comment whenever that tag
 is present. Never add MISSING_INFO as a GitHub label. If a structural correction
