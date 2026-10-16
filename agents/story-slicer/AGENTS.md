@@ -41,6 +41,34 @@ than treating this statement as a substitute for them.
 
 ## Product Workflow
 
+```mermaid
+flowchart TD
+    A[Requirement input] --> B{Source}
+    B -->|YAML| C[Load and parse YAML]
+    B -->|GitHub issue| D[Load issue through GitHub adapter]
+    C --> E[RequirementInputPort returns RequirementDocument]
+    D --> E
+    E --> F[LLMPort generates one JSON story batch]
+    F --> G[Parse JSON and validate each Story]
+    G --> H[Assign project-prefixed IDs]
+    H --> I[Validate complete StoryBatch and metrics]
+    I --> J{Valid?}
+    J -->|No, repairs remain| K[Send repair feedback]
+    K --> F
+    J -->|No, retry limit reached| L[Return validation failure]
+    J -->|Yes| M[Save complete StoryBatch JSON]
+    M --> N{Create tickets requested?}
+    N -->|No| O[Finish]
+    N -->|Yes| P[Create GitHub issue per story]
+    P --> Q[Apply labels and priority]
+    Q --> R[Post clarification comment when nonempty]
+    R --> S{GitHub source issue?}
+    S -->|Yes| T[Link issue with relates to relationship]
+    S -->|No| U[Report results and partial failures]
+    T --> U
+    U --> O
+```
+
 - The workflow loads YAML or GitHub input through `RequirementInputPort` and
   normalizes it to `RequirementDocument`. The application sends that document
   to the selected `LLMPort` with the slicing instructions and the JSON schema

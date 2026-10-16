@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -110,3 +113,12 @@ def test_requirement_document_defaults_and_boundaries() -> None:
         RequirementDocument(project="SHOP", requirements=[])
     with pytest.raises(ValidationError):
         Requirement.model_validate({"description": "Track", "max_retries": 3})
+
+
+def test_checked_in_story_batch_matches_pydantic_contract() -> None:
+    root = Path(__file__).parents[1]
+    batch = StoryBatch.model_validate_json((root / "stories.json").read_text())
+    schema = json.loads((root / "schemas/stories.schema.json").read_text())
+
+    assert schema == StoryBatch.model_json_schema()
+    assert all(story.labels for story in batch.stories)
