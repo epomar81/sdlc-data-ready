@@ -102,7 +102,7 @@ class GitHubRequirementLoader:
             raise InputError(
                 f"GitHub returned HTTP {status} while reading issue"
             ) from None
-        except httpx.HTTPError, ValueError:
+        except (httpx.HTTPError, ValueError):
             raise InputError("GitHub issue request failed") from None
         if not isinstance(issue, dict):
             raise InputError("GitHub returned an invalid issue response")
@@ -183,7 +183,7 @@ class GitHubStoryPublisher:
                 None,
                 f"GitHub source issue returned HTTP {error.response.status_code}",
             )
-        except httpx.HTTPError, ValueError:
+        except (httpx.HTTPError, ValueError):
             return None, "GitHub source issue request failed"
 
     async def publish(self, request: StoryPublishRequest) -> StoryPublishResult:
@@ -310,6 +310,6 @@ class GitHubStoryPublisher:
                     )
                 else:
                     failures.append(f"{story.ID}: GitHub returned HTTP {status}")
-            except httpx.HTTPError, ValueError:
+            except (httpx.HTTPError, ValueError):
                 failures.append(f"{story.ID}: GitHub request failed")
         return StoryPublishResult(created=created, failures=failures)

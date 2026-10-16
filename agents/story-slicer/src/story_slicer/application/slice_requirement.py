@@ -162,7 +162,7 @@ class SliceRequirement:
             session.responses += 1
             usage = result.usage
             return result
-        except TimeoutError, SessionTimeoutError:
+        except (TimeoutError, SessionTimeoutError):
             raise SessionTimeoutError(
                 f"LLM attempt {session.attempts} reached the request timeout of "
                 f"{self._settings.request_timeout_seconds:g}s; "

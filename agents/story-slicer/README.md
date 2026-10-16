@@ -8,7 +8,7 @@ issues. Invoke slicing with `await SliceRequirement(dependencies).execute(source
 
 ## Development
 
-Requires Python 3.14 and `uv`. Dependencies are pinned in `uv.lock`.
+Requires Python 3.11 and `uv`. Dependencies are pinned in `uv.lock`.
 Run the following commands from the project root. Testing and running use the
 source checkout; no `make build`, binary, or package from `dist/` is required.
 

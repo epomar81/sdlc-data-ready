@@ -54,7 +54,7 @@ class NvidiaAdapter(HTTPModelAdapter):
                     }
                 ),
             )
-        except KeyError, IndexError, TypeError, AttributeError, ValidationError:
+        except (KeyError, IndexError, TypeError, AttributeError, ValidationError):
             raise ProviderError(
                 "NVIDIA returned an invalid response envelope"
             ) from None

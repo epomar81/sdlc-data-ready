@@ -79,7 +79,7 @@ class HTTPModelAdapter(ABC):
         error_body: object = None
         try:
             error_body = response.json().get("error")
-        except ValueError, AttributeError:
+        except (ValueError, AttributeError):
             pass
         code = error_body.get("code") if isinstance(error_body, dict) else None
         status = error_body.get("status") if isinstance(error_body, dict) else None

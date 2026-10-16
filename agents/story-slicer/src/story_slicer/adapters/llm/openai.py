@@ -70,7 +70,7 @@ class OpenAIAdapter(HTTPModelAdapter):
                     }
                 ),
             )
-        except KeyError, TypeError, AttributeError, ValueError:
+        except (KeyError, TypeError, AttributeError, ValueError):
             raise ProviderError(
                 "OpenAI returned an invalid, incomplete, or refused response envelope"
             ) from None

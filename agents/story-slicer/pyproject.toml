@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "story-slicer"
 version = "0.1.0"
 description = "Strict story-slicing domain contracts and hexagonal ports"
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "pydantic>=2.12,<3",
     "pyyaml>=6,<7",
@@ -27,14 +27,14 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py311"
 line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.11"
 strict = true
 files = ["src", "tests"]
 plugins = ["pydantic.mypy"]

@@ -60,7 +60,7 @@ class OpenTelemetryObservability:
         self._closed = False
 
     @classmethod
-    def from_settings(cls, settings: RuntimeSettings) -> OpenTelemetryObservability:
+    def from_settings(cls, settings: RuntimeSettings) -> "OpenTelemetryObservability":
         """Construct local providers; export over HTTP only when opted in."""
         if settings.otel_export_mode == "disabled":
             return cls(

@@ -14,7 +14,7 @@ class LocalFileSystem:
         try:
             with open(request.path, "rb") as source:
                 content = source.read(request.max_bytes + 1)
-        except OSError, ValueError:
+        except (OSError, ValueError):
             raise InputError("Requirement file cannot be read") from None
         if len(content) > request.max_bytes:
             raise InputError("Requirement file exceeds the configured size limit")
